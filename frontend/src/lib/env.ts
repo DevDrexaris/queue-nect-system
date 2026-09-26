@@ -23,7 +23,9 @@ export function getSupabasePublishableKey() {
 }
 
 export function getApiUrl() {
-  return stripSlash(import.meta.env.VITE_API_URL || '/api')
+  // Legacy PHP backend is intentionally disabled.
+  // Queue-Nect is frontend-only and uses Supabase directly.
+  return ''
 }
 
 export function getQueueJoinUrl(clinicIdentifier: string, token?: string) {
