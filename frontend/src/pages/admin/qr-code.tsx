@@ -92,7 +92,7 @@ export function AdminQrCodePage() {
             <CardDescription>This is what students see after scanning.</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="mx-auto max-w-sm rounded-[2rem] border border-border bg-background p-5">
+            <div className="mx-auto max-w-sm rounded-4xl border border-border bg-background p-5">
               <p className="text-xs font-medium text-muted-foreground">Welcome to</p>
               <p className="text-2xl font-semibold">{clinicName}</p>
               <p className="text-sm text-muted-foreground">Digital Queue</p>
