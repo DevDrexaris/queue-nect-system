@@ -1,0 +1,152 @@
+import { useEffect, useState } from 'react'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { useForm } from 'react-hook-form'
+import { toast } from 'sonner'
+import { Button } from '../../components/ui/button'
+import { Dialog } from '../../components/ui/dialog'
+import { FieldError, Label } from '../../components/ui/field'
+import { Input } from '../../components/ui/input'
+import { PageHeader } from '../../components/ui/page-header'
+import { Badge } from '../../components/ui/badge'
+import { EmptyState, ErrorState, LoadingState } from '../../components/ui/states'
+import { TBody, TD, TH, THead, TR, Table } from '../../components/ui/table'
+import { organizationSchema } from '../../lib/schemas'
+import { userMessage } from '../../lib/api'
+import { formatDate } from '../../lib/format'
+import { superAdminService } from '../../services/api'
+import type { Organization } from '../../types'
+import type { z } from 'zod'
+
+type Values = z.infer<typeof organizationSchema>
+
+export function SuperAdminOrganizationsPage() {
+  const [orgs, setOrgs] = useState<Organization[]>([])
+  const [error, setError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [open, setOpen] = useState(false)
+  const form = useForm<Values>({ resolver: zodResolver(organizationSchema) })
+
+  async function load() {
+    setLoading(true)
+    try {
+      const data = await superAdminService.organizations()
+      setOrgs(data.organizations)
+      setError(null)
+    } catch (caught) {
+      setOrgs([])
+      setError(userMessage(caught))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    void load()
+  }, [])
+
+  async function onSubmit(values: Values) {
+    try {
+      await superAdminService.createOrganization(values)
+      toast.success('Organization created. Clinic QR is now available to that clinic.')
+      setOpen(false)
+      form.reset()
+      await load()
+    } catch (caught) {
+      toast.error(userMessage(caught))
+    }
+  }
+
+  return (
+    <div>
+      <PageHeader
+        title="Organizations"
+        actions={
+          <Button onClick={() => setOpen(true)}>+ Create organization</Button>
+        }
+      />
+      {loading ? (
+        <LoadingState label="Loading organizations..." />
+      ) : error ? (
+        <ErrorState title="Unable to load organizations." description={error} onRetry={() => void load()} />
+      ) : orgs.length === 0 ? (
+        <EmptyState title="No organizations yet." description="Create a school clinic to provision an admin and QR code." />
+      ) : (
+        <Table>
+          <THead>
+            <TR>
+              <TH>Organization</TH>
+              <TH>Clinic</TH>
+              <TH>Admin</TH>
+              <TH>Status</TH>
+              <TH>Created</TH>
+            </TR>
+          </THead>
+          <TBody>
+            {orgs.map((item) => (
+              <TR key={item.id}>
+                <TD>{item.schoolName}</TD>
+                <TD>{item.clinicName}</TD>
+                <TD>{item.adminName || '—'}</TD>
+                <TD>
+                  <Badge variant={item.status === 'active' ? 'success' : 'outline'}>{item.status}</Badge>
+                </TD>
+                <TD>{formatDate(item.createdAt)}</TD>
+              </TR>
+            ))}
+          </TBody>
+        </Table>
+      )}
+
+      <Dialog
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Create organization"
+        description="This creates the clinic, initial admin account, and clinic identifier for QR codes."
+        className="max-w-lg"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={form.handleSubmit(onSubmit)} loading={form.formState.isSubmitting}>
+              Create
+            </Button>
+          </>
+        }
+      >
+        <form className="grid gap-3 sm:grid-cols-2" onSubmit={form.handleSubmit(onSubmit)}>
+          <div className="sm:col-span-2">
+            <Label htmlFor="schoolName">School Name</Label>
+            <Input id="schoolName" {...form.register('schoolName')} />
+            <FieldError message={form.formState.errors.schoolName?.message} />
+          </div>
+          <div className="sm:col-span-2">
+            <Label htmlFor="clinicName">Clinic Name</Label>
+            <Input id="clinicName" {...form.register('clinicName')} />
+            <FieldError message={form.formState.errors.clinicName?.message} />
+          </div>
+          <div className="sm:col-span-2">
+            <Label htmlFor="address">Address</Label>
+            <Input id="address" {...form.register('address')} />
+            <FieldError message={form.formState.errors.address?.message} />
+          </div>
+          <div>
+            <Label htmlFor="contact">Contact Information</Label>
+            <Input id="contact" {...form.register('contact')} />
+            <FieldError message={form.formState.errors.contact?.message} />
+          </div>
+          <div>
+            <Label htmlFor="adminName">Initial Admin Name</Label>
+            <Input id="adminName" {...form.register('adminName')} />
+            <FieldError message={form.formState.errors.adminName?.message} />
+          </div>
+          <div className="sm:col-span-2">
+            <Label htmlFor="adminEmail">Initial Admin Email</Label>
+            <Input id="adminEmail" type="email" {...form.register('adminEmail')} />
+            <FieldError message={form.formState.errors.adminEmail?.message} />
+          </div>
+        </form>
+      </Dialog>
+    </div>
+  )
+}

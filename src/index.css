@@ -1,0 +1,107 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  --color-background: var(--qn-bg);
+  --color-foreground: var(--qn-fg);
+  --color-muted: var(--qn-muted);
+  --color-muted-foreground: var(--qn-muted-fg);
+  --color-card: var(--qn-card);
+  --color-card-foreground: var(--qn-fg);
+  --color-border: var(--qn-border);
+  --color-ring: var(--qn-ring);
+  --color-primary: var(--qn-primary);
+  --color-primary-foreground: var(--qn-primary-fg);
+  --color-accent: var(--qn-accent);
+  --color-accent-foreground: var(--qn-accent-fg);
+  --color-destructive: var(--qn-destructive);
+  --color-destructive-foreground: #ffffff;
+  --color-success: var(--qn-success);
+  --color-warning: var(--qn-warning);
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+}
+
+:root {
+  --qn-bg: #f4f7fb;
+  --qn-fg: #0f1f33;
+  --qn-muted: #eef2f7;
+  --qn-muted-fg: #5b6b7f;
+  --qn-card: #ffffff;
+  --qn-border: #e3eaf2;
+  --qn-ring: #3b82f6;
+  --qn-primary: #0b2a4a;
+  --qn-primary-fg: #ffffff;
+  --qn-accent: #1d4ed8;
+  --qn-accent-fg: #ffffff;
+  --qn-destructive: #b42318;
+  --qn-success: #067647;
+  --qn-warning: #b54708;
+  color-scheme: light;
+}
+
+.dark {
+  --qn-bg: #0b1220;
+  --qn-fg: #e8eef6;
+  --qn-muted: #162033;
+  --qn-muted-fg: #93a4b8;
+  --qn-card: #121a2a;
+  --qn-border: #243044;
+  --qn-ring: #60a5fa;
+  --qn-primary: #93c5fd;
+  --qn-primary-fg: #0b2a4a;
+  --qn-accent: #3b82f6;
+  --qn-accent-fg: #ffffff;
+  --qn-destructive: #f97066;
+  --qn-success: #75e0a7;
+  --qn-warning: #fdb022;
+  color-scheme: dark;
+}
+
+@layer base {
+  * {
+    border-color: var(--qn-border);
+  }
+
+  html {
+    font-family: var(--font-sans);
+    background: var(--qn-bg);
+    color: var(--qn-fg);
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    margin: 0;
+    min-width: 320px;
+    min-height: 100dvh;
+    background: var(--qn-bg);
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--qn-ring);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: color-mix(in srgb, var(--qn-accent) 22%, transparent);
+  }
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
