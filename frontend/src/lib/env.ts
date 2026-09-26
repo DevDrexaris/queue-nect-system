@@ -5,8 +5,14 @@ function stripSlash(value: string) {
 }
 
 export function getPublicUrl() {
-  const configured = stripSlash(import.meta.env.VITE_PUBLIC_URL || PLACEHOLDER_PUBLIC_URL)
-  if (!configured.startsWith('http://') && !configured.startsWith('https://')) return PLACEHOLDER_PUBLIC_URL
+  const configured = stripSlash(
+    import.meta.env.VITE_PUBLIC_URL || PLACEHOLDER_PUBLIC_URL
+  )
+
+  if (!configured.startsWith('http://') && !configured.startsWith('https://')) {
+    return PLACEHOLDER_PUBLIC_URL
+  }
+
   return configured
 }
 
@@ -15,21 +21,39 @@ export function isPlaceholderPublicUrl() {
 }
 
 export function getSupabaseUrl() {
-  return String(import.meta.env.VITE_SUPABASE_URL || 'https://hckvwvrhmmwqxlbthafe.supabase.co')
+  const url = import.meta.env.VITE_SUPABASE_URL
+
+  if (!url) {
+    throw new Error('VITE_SUPABASE_URL is missing')
+  }
+
+  return url
 }
 
 export function getSupabasePublishableKey() {
-  return String(import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_adOK0DUSXAvI8ySHC8Znfw_X71_KJP_')
+  const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
+
+  if (!key) {
+    throw new Error('VITE_SUPABASE_PUBLISHABLE_KEY is missing')
+  }
+
+  return key
 }
 
 export function getApiUrl() {
   // Legacy PHP backend is intentionally disabled.
-  // Queue-Nect is frontend-only and uses Supabase directly.
+  // Queue-Nect uses Supabase directly.
   return ''
 }
 
-export function getQueueJoinUrl(clinicIdentifier: string, token?: string) {
-  const route = token ? `/q/${encodeURIComponent(token)}` : `/queue/${encodeURIComponent(clinicIdentifier)}`
+export function getQueueJoinUrl(
+  clinicIdentifier: string,
+  token?: string
+) {
+  const route = token
+    ? `/q/${encodeURIComponent(token)}`
+    : `/queue/${encodeURIComponent(clinicIdentifier)}`
+
   return `${getPublicUrl()}${route}`
 }
 
