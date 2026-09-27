@@ -612,10 +612,9 @@ export const queueService = {
   },
 
   updateStatus: async (queueId: string, action: 'call' | 'serve' | 'complete' | 'skip' | 'cancel' | 'return_to_waiting' | 'awaiting_return' | 'call_again') => {
-    const normalizedAction = action === 'call_again' ? 'call' : action
     const { data, error } = await supabase.rpc('transition_queue_entry', {
       p_queue_entry_id: queueId,
-      p_action: normalizedAction,
+      p_action: action
     })
     if (error) throw error
 
