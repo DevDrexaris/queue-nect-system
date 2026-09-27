@@ -10,6 +10,7 @@ export function QueueAccessRequiredPage() {
   const { clinicId = '' } = useParams()
   const [link, setLink] = useState('')
   const [loading, setLoading] = useState(Boolean(clinicId))
+  const [errorMessage, setErrorMessage] = useState('')
 
   useEffect(() => {
     if (!clinicId) {
@@ -19,10 +20,16 @@ export function QueueAccessRequiredPage() {
 
     async function loadAccessToken() {
       try {
+        setErrorMessage('')
         const details = await queueService.issueAccessToken(clinicId)
         setLink(details.link)
-      } catch {
+      } catch (error) {
         setLink('')
+        setErrorMessage(
+          error instanceof Error && error.message
+            ? error.message
+            : 'The QR access system is unavailable right now. Please try again in a moment.'
+        )
       } finally {
         setLoading(false)
       }
@@ -59,8 +66,8 @@ export function QueueAccessRequiredPage() {
               <p className="mt-2">No app installation is required.</p>
             </div>
           ) : (
-            <div className="flex min-h-[180px] items-center justify-center text-sm text-red-600">
-              QR code is unavailable right now. Please try again.
+            <div className="flex min-h-[180px] items-center justify-center px-2 text-center text-sm text-red-600">
+              {errorMessage || 'QR code is unavailable right now. Please try again.'}
             </div>
           )}
         </div>
