@@ -118,7 +118,7 @@ function countPeopleAhead(entries: Array<{ id: string; status: string; joined_at
 
   return entries.filter((entry) => {
     if (entry.id === currentId) return false
-    if (!['WAITING', 'CALLED'].includes(entry.status)) return false
+    if (!['WAITING', 'CALLED', 'SERVING'].includes(entry.status)) return false
     if (!entry.joined_at) return false
     return new Date(entry.joined_at).getTime() < new Date(joinedAt).getTime()
   }).length
@@ -632,7 +632,7 @@ export const queueService = {
   updateStatus: async (queueId: string, action: 'call' | 'serve' | 'skip' | 'cancel' | 'recall') => {
     const map: Record<string, Partial<any>> = {
       call: { status: 'CALLED', called_at: new Date().toISOString() },
-      serve: { status: 'SERVING', started_at: new Date().toISOString() },
+      serve: { status: 'COMPLETED', completed_at: new Date().toISOString() },
       skip: { status: 'NO_SHOW', no_show_at: new Date().toISOString() },
       cancel: { status: 'CANCELLED', cancelled_at: new Date().toISOString() },
       recall: { status: 'WAITING', called_at: null },

@@ -56,3 +56,21 @@ export function formatWait(minutes?: number | null) {
   if (minutes < 1) return '<1 min'
   return `~${minutes} min`
 }
+
+export function formatElapsedMinutes(startIso?: string | null, endIso?: string | null, now = new Date()) {
+  if (!startIso) return '—'
+  const start = new Date(startIso).getTime()
+  const end = endIso ? new Date(endIso).getTime() : now.getTime()
+  if (Number.isNaN(start) || Number.isNaN(end) || end < start) return '—'
+  const minutes = Math.max(0, Math.round((end - start) / 60000))
+  if (minutes < 1) return '<1 min'
+  return `${minutes} min`
+}
+
+export function formatServiceRange(startIso?: string | null, endIso?: string | null) {
+  if (!startIso || !endIso) return '—'
+  const start = new Date(startIso)
+  const end = new Date(endIso)
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return '—'
+  return `${start.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })} to ${end.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
+}

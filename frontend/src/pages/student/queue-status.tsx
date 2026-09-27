@@ -11,7 +11,7 @@ import { QueueStatusBadge } from '../../components/ui/queue-status-badge'
 import { ConnectionBanner } from '../../components/ui/connection-banner'
 import { EmptyState, ErrorState, LoadingState } from '../../components/ui/states'
 import { buttonVariants } from '../../components/ui/button'
-import { formatWait } from '../../lib/format'
+import { formatElapsedMinutes, formatServiceRange, formatWait } from '../../lib/format'
 import { cn } from '../../lib/utils'
 import type { QueueEntry, QueueSnapshot } from '../../types'
 
@@ -151,6 +151,7 @@ export function QueueStatusPage() {
 
   const serving = snapshot?.nowServing?.queueNumber
   const waiting = snapshot?.entries.filter((item) => item.status === 'WAITING' || item.id === entry.id).slice(0, 8) ?? []
+  const finalServiceTime = entry.servedAt || entry.joinedAt
 
   return (
     <div className="space-y-5">
@@ -181,8 +182,14 @@ export function QueueStatusPage() {
             <p className="mt-1 font-mono text-2xl font-semibold tabular-nums">{entry.peopleAhead ?? '—'}</p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground uppercase">Estimated wait</p>
-            <p className="mt-1 font-mono text-2xl font-semibold tabular-nums">{formatWait(entry.estimatedWaitMinutes)}</p>
+            <p className="text-xs text-muted-foreground uppercase">
+              {entry.status === 'COMPLETED' || entry.status === 'SERVED' ? 'Time spent' : 'Estimated wait'}
+            </p>
+            <p className="mt-1 font-mono text-2xl font-semibold tabular-nums">
+              {entry.status === 'COMPLETED' || entry.status === 'SERVED'
+                ? formatElapsedMinutes(entry.joinedAt, entry.servedAt ?? entry.joinedAt)
+                : formatWait(entry.estimatedWaitMinutes)}
+            </p>
           </div>
           <div className="col-span-2">
             <p className="text-xs text-muted-foreground uppercase">Status</p>
@@ -206,6 +213,13 @@ export function QueueStatusPage() {
           </div>
         </CardContent>
       </Card>
+
+      {(entry.status === 'COMPLETED' || entry.status === 'SERVED') && finalServiceTime ? (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+          <p className="font-medium">Took you {formatElapsedMinutes(entry.joinedAt, entry.servedAt ?? entry.joinedAt)}.</p>
+          <p className="mt-1">From {formatServiceRange(entry.joinedAt, entry.servedAt ?? entry.joinedAt)}</p>
+        </div>
+      ) : null}
 
       {waiting.length > 0 ? (
         <div className="flex flex-wrap items-center justify-center gap-2 text-sm">
