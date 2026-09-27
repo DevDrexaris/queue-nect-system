@@ -68,7 +68,7 @@ export function AdminQueuePage() {
     }
   }
 
-  async function run(action: 'call' | 'serve' | 'skip' | 'cancel' | 'recall', entry: QueueEntry) {
+  async function run(action: 'call' | 'serve' | 'skip' | 'cancel' | 'recall' | 'stop_call', entry: QueueEntry) {
     try {
       await queueService.updateStatus(entry.id, action)
       toast.success(`Updated ${entry.queueNumber}`)
@@ -187,7 +187,7 @@ export function AdminQueuePage() {
               </div>
               <div className="flex flex-wrap gap-2">
                 {serving.status === 'CALLED' ? (
-                  <Button variant="outline" onClick={() => void run('recall', serving)}>
+                  <Button variant="outline" onClick={() => void run('stop_call', serving)}>
                     Stop calling
                   </Button>
                 ) : null}
@@ -265,7 +265,7 @@ export function AdminQueuePage() {
                     <TD>
                       <ActionMenu label="Manage">
                         {item.status === 'CALLED' ? (
-                          <ActionItem onClick={() => void run('recall', item)}>Stop calling</ActionItem>
+                          <ActionItem onClick={() => void run('stop_call', item)}>Stop calling</ActionItem>
                         ) : null}
                         {item.status !== 'CANCELLED' && item.status !== 'NO_SHOW' && item.status !== 'SERVING' ? (
                           <ActionItem onClick={() => void run('call', item)}>Call</ActionItem>
@@ -298,7 +298,7 @@ export function AdminQueuePage() {
                   <QueueNumber value={item.queueNumber} size="sm" />
                   <ActionMenu label="Manage">
                     {item.status === 'CALLED' ? (
-                      <ActionItem onClick={() => void run('recall', item)}>Stop calling</ActionItem>
+                      <ActionItem onClick={() => void run('stop_call', item)}>Stop calling</ActionItem>
                     ) : null}
                     {item.status !== 'CANCELLED' && item.status !== 'NO_SHOW' && item.status !== 'SERVING' ? (
                       <ActionItem onClick={() => void run('call', item)}>Call</ActionItem>

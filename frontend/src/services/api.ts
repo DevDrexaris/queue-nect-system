@@ -720,7 +720,7 @@ export const queueService = {
     return { queueSessionId: session.id, queuePrefix: org.queue_prefix }
   },
 
-  updateStatus: async (queueId: string, action: 'call' | 'serve' | 'skip' | 'cancel' | 'recall') => {
+  updateStatus: async (queueId: string, action: 'call' | 'serve' | 'skip' | 'cancel' | 'recall' | 'stop_call') => {
     const map: Record<string, Partial<any>> = {
       call: {
         status: 'CALLED',
@@ -731,6 +731,14 @@ export const queueService = {
         no_show_at: null,
       },
       serve: { status: 'COMPLETED', completed_at: new Date().toISOString(), started_at: new Date().toISOString() },
+      stop_call: {
+        status: 'SERVING',
+        called_at: new Date().toISOString(),
+        started_at: new Date().toISOString(),
+        completed_at: null,
+        cancelled_at: null,
+        no_show_at: null,
+      },
       skip: { status: 'NO_SHOW', no_show_at: new Date().toISOString() },
       cancel: { status: 'CANCELLED', cancelled_at: new Date().toISOString() },
       recall: {

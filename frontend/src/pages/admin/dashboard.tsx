@@ -53,7 +53,7 @@ export function AdminDashboardPage() {
     }
   }
 
-  async function act(entry: QueueEntry, action: 'serve' | 'skip' | 'cancel' | 'recall') {
+  async function act(entry: QueueEntry, action: 'serve' | 'skip' | 'cancel' | 'recall' | 'stop_call') {
     try {
       await queueService.updateStatus(entry.id, action)
       toast.success(`Updated ${entry.queueNumber}`)
@@ -147,7 +147,7 @@ export function AdminDashboardPage() {
                 <p className="text-sm text-muted-foreground">{serving.purpose}</p>
                 <div className="mt-4 flex flex-wrap gap-2">
                   {serving.status === 'CALLED' ? (
-                    <Button variant="outline" onClick={() => void act(serving, 'recall')}>
+                    <Button variant="outline" onClick={() => void act(serving, 'stop_call')}>
                       Stop calling
                     </Button>
                   ) : null}
