@@ -257,15 +257,16 @@ begin
   totals as (
     select
       count(*)::integer as total,
-      count(*) filter (where status in ('COMPLETED', 'SERVED'))::integer as completed,
+      count(*) filter (where status = 'COMPLETED')::integer as completed,
       count(*) filter (where status = 'CANCELLED')::integer as cancelled,
       count(*) filter (where status = 'NO_SHOW')::integer as no_show,
       count(*) filter (where status = 'WAITING')::integer as waiting,
       count(*) filter (where status = 'SERVING')::integer as serving,
+      count(*) filter (where status = 'AWAITING_RETURN')::integer as awaiting_return,
       round(avg(extract(epoch from (coalesce(called_at, started_at) - joined_at)) / 60.0)
         filter (where coalesce(called_at, started_at) is not null)::numeric, 1) as average_wait,
       round(avg(extract(epoch from (completed_at - started_at)) / 60.0)
-        filter (where status in ('COMPLETED', 'SERVED') and completed_at is not null and started_at is not null)::numeric, 1) as average_service
+        filter (where status = 'COMPLETED' and completed_at is not null and started_at is not null)::numeric, 1) as average_service
     from selected
   ),
   hourly as (
@@ -287,6 +288,7 @@ begin
     'noShow', totals.no_show,
     'waiting', totals.waiting,
     'serving', totals.serving,
+    'awaitingReturn', totals.awaiting_return,
     'averageWaitMinutes', totals.average_wait,
     'averageServiceMinutes', totals.average_service,
     'hourly', coalesce((select jsonb_agg(jsonb_build_object('hour', hour, 'value', total) order by hour) from hourly), '[]'::jsonb),

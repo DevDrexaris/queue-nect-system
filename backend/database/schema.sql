@@ -406,6 +406,80 @@ using (
   public.is_super_admin() or public.is_org_staff(organization_id)
 );
 
+create or replace function public.delete_queue_entry(p_queue_entry_id uuid)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_entry public.queue_entries%rowtype;
+begin
+  select * into v_entry
+  from public.queue_entries
+  where id = p_queue_entry_id
+  for update;
+
+  if not found then
+    raise exception 'Queue entry not found';
+  end if;
+
+  if not (public.is_super_admin() or public.is_org_staff(v_entry.organization_id)) then
+    raise exception 'Not authorized to delete this queue entry';
+  end if;
+
+  if v_entry.status not in ('COMPLETED', 'CANCELLED', 'NO_SHOW') then
+    raise exception 'Only completed, cancelled, or no-show entries can be deleted';
+  end if;
+
+  insert into public.queue_history (
+    organization_id,
+    queue_session_id,
+    queue_entry_id,
+    queue_number,
+    student_id,
+    full_name,
+    course,
+    year_level,
+    purpose,
+    status,
+    joined_at,
+    called_at,
+    started_at,
+    completed_at,
+    cancelled_at,
+    no_show_at
+  )
+  values (
+    v_entry.organization_id,
+    v_entry.queue_session_id,
+    v_entry.id,
+    v_entry.queue_number,
+    v_entry.student_id,
+    v_entry.full_name,
+    v_entry.course,
+    v_entry.year_level,
+    v_entry.purpose,
+    v_entry.status,
+    v_entry.joined_at,
+    v_entry.called_at,
+    v_entry.started_at,
+    v_entry.completed_at,
+    v_entry.cancelled_at,
+    v_entry.no_show_at
+  );
+
+  delete from public.queue_entries
+  where id = p_queue_entry_id
+  returning * into v_entry;
+
+  return to_jsonb(v_entry);
+end;
+$$;
+
+revoke all on function public.delete_queue_entry(uuid) from public;
+grant execute on function public.delete_queue_entry(uuid) to authenticated;
+
 create policy "Org staff can reset queue sessions for their org"
 on public.queue_sessions
 for update

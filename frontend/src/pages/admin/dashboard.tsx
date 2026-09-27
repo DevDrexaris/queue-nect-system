@@ -55,10 +55,15 @@ export function AdminDashboardPage() {
     }
   }
 
-  async function act(entry: QueueEntry, action: 'serve' | 'complete' | 'skip' | 'cancel' | 'return_to_waiting') {
+  async function act(entry: QueueEntry, action: ConfirmedQueueAction | 'serve' | 'complete' | 'return_to_waiting' | 'awaiting_return' | 'call_again' | 'cancel' | 'skip') {
     try {
-      await queueService.updateStatus(entry.id, action)
-      toast.success(`Updated ${entry.queueNumber}`)
+      if (action === 'delete') {
+        await queueService.deleteEntry(clinicId ?? entry.clinicId, entry.id)
+        toast.success(`Deleted ${entry.queueNumber}`)
+      } else {
+        await queueService.updateStatus(entry.id, action)
+        toast.success(`Updated ${entry.queueNumber}`)
+      }
       setPendingAction(null)
       await reload()
     } catch (caught) {
@@ -223,6 +228,7 @@ export function AdminDashboardPage() {
                             {item.status === 'SERVING' ? <ActionItem onClick={() => void act(item, 'complete')}>Complete service</ActionItem> : null}
                             {['WAITING', 'CALLED'].includes(item.status) ? <ActionItem onClick={() => setPendingAction({ entry: item, action: 'skip' })}>Mark as no-show</ActionItem> : null}
                             {['WAITING', 'CALLED', 'SERVING'].includes(item.status) ? <ActionItem destructive onClick={() => setPendingAction({ entry: item, action: 'cancel' })}>Cancel queue</ActionItem> : null}
+                            {['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(item.status) ? <ActionItem destructive onClick={() => setPendingAction({ entry: item, action: 'delete' })}>Delete</ActionItem> : null}
                           </ActionMenu>
                         </TD>
                       </TR>

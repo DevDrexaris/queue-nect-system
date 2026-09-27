@@ -11,7 +11,6 @@ import { QueueActionDialog, type ConfirmedQueueAction } from '../../components/u
 import { SearchInput } from '../../components/ui/search-input'
 import { Select } from '../../components/ui/select'
 import { EmptyState, ErrorState, LoadingState } from '../../components/ui/states'
-import { ActionItem, ActionMenu } from '../../components/ui/action-menu'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
 import { TBody, TD, TH, THead, TR, Table } from '../../components/ui/table'
 import { useAuth } from '../../hooks/use-auth'
@@ -72,10 +71,16 @@ export function AdminQueuePage() {
     }
   }
 
-  async function run(action: 'call' | 'serve' | 'complete' | 'skip' | 'cancel', entry: QueueEntry) {
+  async function run(action: 'call' | 'serve' | 'complete' | 'skip' | 'cancel' | 'return_to_waiting' | 'awaiting_return' | 'call_again' | 'delete', entry: QueueEntry) {
     try {
-      await queueService.updateStatus(entry.id, action)
-      toast.success(`Updated ${entry.queueNumber}`)
+      if (action === 'delete') {
+        await queueService.deleteEntry(clinicId ?? entry.clinicId, entry.id)
+        toast.success(`Deleted ${entry.queueNumber}.`)
+      } else {
+        await queueService.updateStatus(entry.id, action)
+        const label = action === 'call_again' ? 'called again' : action === 'awaiting_return' ? 'placed on hold awaiting return' : action === 'return_to_waiting' ? 'returned to waiting' : action === 'complete' ? 'completed' : action === 'call' ? 'called' : action === 'serve' ? 'served' : action === 'cancel' ? 'cancelled' : 'marked no-show'
+        toast.success(`${entry.queueNumber} ${label}.`)
+      }
       setPending(null)
       setPendingAction(null)
       await reload()
@@ -124,6 +129,49 @@ export function AdminQueuePage() {
 
   const serving = data?.nowServing
   const calledEntry = data?.entries.find((item) => item.status === 'CALLED') ?? null
+
+  function renderQueueActions(item: QueueEntry) {
+    if (item.status === 'WAITING') {
+      return (
+        <>
+          <Button size="sm" onClick={() => void run('call', item)}>Call</Button>
+          <Button size="sm" variant="outline" onClick={() => requestQueueAction(item, 'cancel')}>Cancel</Button>
+          <Button size="sm" variant="outline" onClick={() => requestQueueAction(item, 'skip')}>Mark No-show</Button>
+        </>
+      )
+    }
+
+    if (item.status === 'CALLED') {
+      return (
+        <>
+          <Button size="sm" onClick={() => void run('serve', item)}>Serve</Button>
+          <Button size="sm" variant="outline" onClick={() => void run('return_to_waiting', item)}>Return to Waiting</Button>
+          <Button size="sm" variant="outline" onClick={() => requestQueueAction(item, 'cancel')}>Cancel</Button>
+          <Button size="sm" variant="outline" onClick={() => requestQueueAction(item, 'skip')}>Mark No-show</Button>
+        </>
+      )
+    }
+
+    if (item.status === 'SERVING') {
+      return (
+        <>
+          <Button size="sm" variant="outline" onClick={() => requestQueueAction(item, 'awaiting_return')}>Awaiting Return</Button>
+          <Button size="sm" onClick={() => void run('complete', item)}>Finish Service</Button>
+          <Button size="sm" variant="outline" onClick={() => requestQueueAction(item, 'cancel')}>Cancel</Button>
+        </>
+      )
+    }
+
+    if (item.status === 'AWAITING_RETURN') {
+      return <Button size="sm" onClick={() => void run('call_again', item)}>Call Again</Button>
+    }
+
+    if (['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(item.status)) {
+      return <Button size="sm" variant="destructive" onClick={() => requestQueueAction(item, 'delete')}>Delete</Button>
+    }
+
+    return null
+  }
 
   return (
     <div>
@@ -174,25 +222,33 @@ export function AdminQueuePage() {
                 serving.status === 'SERVING'
                   ? 'border-status-serving/40 bg-status-serving/10'
                   : '',
+                serving.status === 'AWAITING_RETURN'
+                  ? 'border-amber-500/35 bg-amber-500/10'
+                  : '',
               ].join(' ')}
             >
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <QueueNumber
-                  value={serving.queueNumber}
-                  size="lg"
-                  className={serving.status === 'CALLED' ? 'queue-number-calling' : 'text-status-serving'}
-                />
-                <p className="mt-2 font-medium">{serving.studentName}</p>
-                <p className="text-sm text-muted-foreground">{serving.purpose}</p>
-                <p className="mt-1 text-xs text-muted-foreground">Started: {formatTime(serving.calledAt)}</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {serving.status === 'CALLED' ? <Button onClick={() => void run('serve', serving)}>Serve</Button> : null}
-                {serving.status === 'SERVING' ? <Button onClick={() => void run('complete', serving)}>Finish service</Button> : null}
-                {['CALLED', 'SERVING'].includes(serving.status) ? <Button variant="outline" onClick={() => requestQueueAction(serving, 'cancel')}>Cancel</Button> : null}
-                {['WAITING', 'CALLED'].includes(serving.status) ? <Button variant="outline" onClick={() => requestQueueAction(serving, 'skip')}>Mark as no-show</Button> : null}
-              </div>
+                <div>
+                  <QueueNumber
+                    value={serving.queueNumber}
+                    size="lg"
+                    className={serving.status === 'CALLED' ? 'queue-number-calling' : serving.status === 'AWAITING_RETURN' ? 'text-amber-500' : 'text-status-serving'}
+                  />
+                  <p className="mt-2 font-medium">{serving.studentName}</p>
+                  <p className="text-sm text-muted-foreground">{serving.purpose}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {serving.status === 'AWAITING_RETURN' ? 'Awaiting return' : 'Started: ' + formatTime(serving.calledAt)}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {serving.status === 'CALLED' ? <Button onClick={() => void run('serve', serving)}>Serve</Button> : null}
+                  {serving.status === 'CALLED' ? <Button variant="outline" onClick={() => void run('return_to_waiting', serving)}>Return to Waiting</Button> : null}
+                  {serving.status === 'SERVING' ? <Button variant="outline" onClick={() => requestQueueAction(serving, 'awaiting_return')}>Awaiting Return</Button> : null}
+                  {serving.status === 'SERVING' ? <Button onClick={() => void run('complete', serving)}>Finish Service</Button> : null}
+                  {serving.status === 'AWAITING_RETURN' ? <Button onClick={() => void run('call_again', serving)}>Call Again</Button> : null}
+                  {['CALLED', 'SERVING'].includes(serving.status) ? <Button variant="outline" onClick={() => requestQueueAction(serving, 'cancel')}>Cancel</Button> : null}
+                  {['WAITING', 'CALLED'].includes(serving.status) ? <Button variant="outline" onClick={() => requestQueueAction(serving, 'skip')}>Mark as no-show</Button> : null}
+                </div>
               </div>
             </div>
           ) : (
@@ -258,15 +314,9 @@ export function AdminQueuePage() {
                       <div className="mt-1"><QueuePresenceBadge presence={presenceById.get(item.id)} now={realtime.now} /></div>
                     </TD>
                     <TD>
-                      <ActionMenu label="Manage">
-                        {item.status === 'WAITING' ? (
-                          <ActionItem onClick={() => void run('call', item)}>Call</ActionItem>
-                        ) : null}
-                        {item.status === 'CALLED' ? <ActionItem onClick={() => void run('serve', item)}>Start service</ActionItem> : null}
-                        {item.status === 'SERVING' ? <ActionItem onClick={() => void run('complete', item)}>Complete service</ActionItem> : null}
-                        {['WAITING', 'CALLED'].includes(item.status) ? <ActionItem onClick={() => requestQueueAction(item, 'skip')}>Mark as no-show</ActionItem> : null}
-                        {['WAITING', 'CALLED', 'SERVING'].includes(item.status) ? <ActionItem destructive onClick={() => requestQueueAction(item, 'cancel')}>Cancel queue</ActionItem> : null}
-                      </ActionMenu>
+                      <div className="flex flex-wrap gap-2">
+                        {renderQueueActions(item)}
+                      </div>
                     </TD>
                   </TR>
                 ))}
@@ -278,15 +328,9 @@ export function AdminQueuePage() {
               <div key={item.id} className="rounded-xl border border-border bg-card p-4">
                 <div className="flex items-start justify-between gap-3">
                   <QueueNumber value={item.queueNumber} size="sm" className={item.status === 'CALLED' ? 'queue-number-calling' : undefined} />
-                  <ActionMenu label="Manage">
-                    {item.status === 'WAITING' ? (
-                      <ActionItem onClick={() => void run('call', item)}>Call</ActionItem>
-                    ) : null}
-                    {item.status === 'CALLED' ? <ActionItem onClick={() => void run('serve', item)}>Start service</ActionItem> : null}
-                    {item.status === 'SERVING' ? <ActionItem onClick={() => void run('complete', item)}>Complete service</ActionItem> : null}
-                    {['WAITING', 'CALLED'].includes(item.status) ? <ActionItem onClick={() => requestQueueAction(item, 'skip')}>Mark as no-show</ActionItem> : null}
-                    {['WAITING', 'CALLED', 'SERVING'].includes(item.status) ? <ActionItem destructive onClick={() => requestQueueAction(item, 'cancel')}>Cancel queue</ActionItem> : null}
-                  </ActionMenu>
+                  <div className="flex flex-wrap justify-end gap-2">
+                    {renderQueueActions(item)}
+                  </div>
                 </div>
                 <p className="mt-2 font-medium">{item.studentName}</p>
                 <p className="text-sm text-muted-foreground">{item.purpose}</p>

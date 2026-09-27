@@ -574,6 +574,19 @@ export const queueService = {
     return data
   },
 
+  deleteEntry: async (clinicIdentifier: string, queueId: string) => {
+    const { data: org, error: orgError } = await getOrgIdFromClinicIdentifier(clinicIdentifier)
+    if (orgError) throw orgError
+    if (!org) throw new Error('Clinic not found.')
+
+    const { data, error } = await supabase.rpc('delete_queue_entry', { p_queue_entry_id: queueId })
+    if (error) throw error
+    return {
+      id: (data as any)?.id ?? queueId,
+      organizationId: org.id,
+    }
+  },
+
   resetQueue: async (clinicIdentifier: string) => {
     const { data: org, error: orgError } = await getOrgIdFromClinicIdentifier(clinicIdentifier)
     if (orgError) throw orgError
@@ -818,6 +831,7 @@ export const analyticsService = {
       noShow: data.noShow as number,
       waiting: data.waiting as number,
       serving: data.serving as number,
+      awaitingReturn: data.awaitingReturn as number,
       averageWaitMinutes: data.averageWaitMinutes as number | null,
       averageServiceMinutes: data.averageServiceMinutes as number | null,
       hourly: (data.hourly as { hour: number; value: number }[]).map((item) => ({ label: `${String(item.hour).padStart(2, '0')}:00`, value: item.value })),

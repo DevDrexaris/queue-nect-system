@@ -6,7 +6,6 @@ import { StatCard } from '../../components/ui/stat-card'
 import { ErrorState, LoadingState } from '../../components/ui/states'
 import { useAuth } from '../../hooks/use-auth'
 import { analyticsService } from '../../services/api'
-import { userMessage } from '../../lib/api'
 import { formatWait } from '../../lib/format'
 
 function localDateValue(date: Date) {
@@ -23,6 +22,7 @@ type Analytics = {
   noShow: number
   waiting: number
   serving: number
+  awaitingReturn: number
   averageWaitMinutes: number | null
   averageServiceMinutes: number | null
   hourly: { label: string; value: number }[]
@@ -53,8 +53,9 @@ export function AdminAnalyticsPage() {
       setData(summary)
       setError(null)
     } catch (caught) {
+      console.error('[Queue-Nect] Analytics load failed:', caught)
       setData(null)
-      setError(userMessage(caught))
+      setError('Unable to load analytics. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -89,6 +90,7 @@ export function AdminAnalyticsPage() {
             <StatCard label="No show" value={data.noShow} />
             <StatCard label="Currently waiting" value={data.waiting} />
             <StatCard label="Currently serving" value={data.serving} />
+            <StatCard label="Awaiting return" value={data.awaitingReturn ?? 0} />
             <StatCard label="Average waiting time" value={formatWait(data.averageWaitMinutes)} />
             <StatCard label="Average service time" value={formatWait(data.averageServiceMinutes)} />
           </div>
