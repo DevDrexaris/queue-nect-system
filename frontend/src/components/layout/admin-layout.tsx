@@ -98,17 +98,21 @@ export function AdminLayout() {
         </aside>
 
         {open ? (
-          <div className="fixed inset-0 z-40 lg:hidden">
-            <button type="button" className="absolute inset-0 bg-foreground/40" aria-label="Close menu" onClick={() => setOpen(false)} />
-            <aside className="relative z-10 flex h-full w-72 max-w-[85vw] flex-col bg-card shadow-xl">
-              <div className="flex h-16 items-center justify-between border-b border-border px-4">
-                <Logo size="sm" />
-                <Button variant="ghost" size="icon" onClick={() => setOpen(false)} aria-label="Close navigation">
-                  <X className="size-4" />
-                </Button>
-              </div>
-              <SidebarNav sections={sections} onNavigate={() => setOpen(false)} />
-            </aside>
+          <div className="fixed inset-0 z-40 flex lg:hidden">
+            <div className="w-72 max-w-[85vw] shrink-0 border-r border-border bg-card/95 shadow-2xl backdrop-blur-sm">
+              <aside className="flex h-full w-full flex-col bg-card/95">
+                <div className="flex h-16 items-center justify-between border-b border-border px-4">
+                  <Logo size="sm" />
+                  <Button variant="ghost" size="icon" onClick={() => setOpen(false)} aria-label="Close navigation">
+                    <X className="size-4" />
+                  </Button>
+                </div>
+                <div className="flex-1 overflow-hidden">
+                  <SidebarNav sections={sections} onNavigate={() => setOpen(false)} />
+                </div>
+              </aside>
+            </div>
+            <button type="button" className="flex-1 bg-slate-950/10 backdrop-blur-[1px] transition-colors hover:bg-slate-950/15" aria-label="Close menu" onClick={() => setOpen(false)} />
           </div>
         ) : null}
 
