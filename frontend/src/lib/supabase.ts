@@ -1,10 +1,16 @@
 import { createClient } from '@supabase/supabase-js'
-import { getSupabasePublishableKey, getSupabaseUrl } from './env'
+import { validateSupabaseRuntimeEnv } from './env'
 
-const supabaseUrl = getSupabaseUrl()
-const supabaseAnonKey = getSupabasePublishableKey()
+const { url: supabaseUrl, key: supabasePublishableKey } = validateSupabaseRuntimeEnv()
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+console.info('[Queue-Nect] Supabase client initialization:', {
+  url: supabaseUrl,
+  keyExists: Boolean(supabasePublishableKey),
+  keyLength: supabasePublishableKey.length,
+  keyPrefix: supabasePublishableKey.substring(0, 14),
+})
+
+export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,

@@ -20,6 +20,29 @@ export function isPlaceholderPublicUrl() {
   return getPublicUrl() === PLACEHOLDER_PUBLIC_URL
 }
 
+export function validateSupabaseRuntimeEnv() {
+  const url = import.meta.env.VITE_SUPABASE_URL
+  const key = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
+
+  const diagnostics = {
+    urlExists: Boolean(url),
+    keyExists: Boolean(key),
+    keyLength: key?.length ?? 0,
+    keyPrefix: key?.substring(0, 14) ?? 'missing',
+    url: url ?? 'missing',
+  }
+
+  console.info('[Queue-Nect] Supabase runtime config:', diagnostics)
+
+  if (!url || !key) {
+    throw new Error(
+      'Queue-Nect Supabase config is incomplete. VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY are required.'
+    )
+  }
+
+  return { url, key }
+}
+
 export function getSupabaseUrl() {
   const url = import.meta.env.VITE_SUPABASE_URL
 
