@@ -272,10 +272,10 @@ export function AdminQueuePage() {
                         {item.status === 'CALLED' ? (
                           <ActionItem onClick={() => void run('stop_call', item)}>Stop calling</ActionItem>
                         ) : null}
-                        {item.status !== 'CANCELLED' && item.status !== 'NO_SHOW' && item.status !== 'SERVING' ? (
+                        {['WAITING', 'NO_SHOW'].includes(item.status) ? (
                           <ActionItem onClick={() => void run('call', item)}>Call</ActionItem>
                         ) : null}
-                        {(item.status === 'COMPLETED' || item.status === 'SERVED') ? (
+                        {['COMPLETED', 'SERVED', 'NO_SHOW'].includes(item.status) ? (
                           <ActionItem onClick={() => void run('recall', item)}>Restore to waiting</ActionItem>
                         ) : null}
                         <ActionItem destructive onClick={() => setPending(item)}>
@@ -305,10 +305,10 @@ export function AdminQueuePage() {
                     {item.status === 'CALLED' ? (
                       <ActionItem onClick={() => void run('stop_call', item)}>Stop calling</ActionItem>
                     ) : null}
-                    {item.status !== 'CANCELLED' && item.status !== 'NO_SHOW' && item.status !== 'SERVING' ? (
+                    {['WAITING', 'NO_SHOW'].includes(item.status) ? (
                       <ActionItem onClick={() => void run('call', item)}>Call</ActionItem>
                     ) : null}
-                    {(item.status === 'COMPLETED' || item.status === 'SERVED') ? (
+                    {['COMPLETED', 'SERVED', 'NO_SHOW'].includes(item.status) ? (
                       <ActionItem onClick={() => void run('recall', item)}>Restore to waiting</ActionItem>
                     ) : null}
                     <ActionItem destructive onClick={() => setPending(item)}>

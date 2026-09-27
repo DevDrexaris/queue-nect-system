@@ -224,11 +224,11 @@ export function AdminDashboardPage() {
                         </TD>
                         <TD>
                           <ActionMenu>
-                            {item.status !== 'CANCELLED' && item.status !== 'NO_SHOW' && item.status !== 'SERVING' ? (
+                            {['WAITING', 'NO_SHOW'].includes(item.status) ? (
                               <ActionItem onClick={() => void queueService.updateStatus(item.id, 'call').then(reload)}>Call</ActionItem>
                             ) : null}
                             <ActionItem onClick={() => void act(item, 'serve')}>Serve</ActionItem>
-                            {(item.status === 'COMPLETED' || item.status === 'SERVED') ? (
+                            {['COMPLETED', 'SERVED', 'NO_SHOW'].includes(item.status) ? (
                               <ActionItem onClick={() => void act(item, 'recall')}>Restore to waiting</ActionItem>
                             ) : null}
                             <ActionItem onClick={() => void act(item, 'skip')}>Skip</ActionItem>
