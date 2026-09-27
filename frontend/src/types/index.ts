@@ -64,6 +64,7 @@ export type QueueEntry = {
   yearLevel?: string
   purpose?: VisitPurpose | string
   status: QueueStatus
+  cancellationSource?: 'STUDENT' | 'ADMIN' | null
   joinedAt: string
   calledAt?: string | null
   servedAt?: string | null

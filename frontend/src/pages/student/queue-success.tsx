@@ -5,12 +5,14 @@ import { QueueStatusBadge } from '../../components/ui/queue-status-badge'
 import { buttonVariants } from '../../components/ui/button'
 import { formatElapsedMinutes } from '../../lib/format'
 import { cn } from '../../lib/utils'
+import { useStudentQueueRealtime } from '../../hooks/use-student-presence'
 import type { QueueEntry } from '../../types'
 
 export function QueueSuccessPage() {
   const { clinicId = '' } = useParams()
   const location = useLocation()
   const entry = (location.state as { entry?: QueueEntry } | null)?.entry
+  useStudentQueueRealtime(() => undefined)
 
   if (!entry) return <Navigate to={`/queue/${clinicId}`} replace />
 

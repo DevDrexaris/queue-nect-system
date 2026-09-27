@@ -1,13 +1,15 @@
 import { useCallback, useState } from 'react'
+import { useEffect } from 'react'
 import { queueService } from '../services/api'
 import { userMessage } from '../lib/api'
-import { usePolling } from './use-polling'
+import { supabaseAnon } from '../lib/supabase'
 import type { QueueSnapshot } from '../types'
 
-export function useQueueSnapshot(clinicIdentifier: string | undefined, intervalMs: number) {
+export function useQueueSnapshot(clinicIdentifier: string | undefined, _intervalMs?: number) {
   const [data, setData] = useState<QueueSnapshot | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [realtimeStatus, setRealtimeStatus] = useState<'connecting' | 'connected' | 'reconnecting' | 'disconnected'>('connecting')
 
   const load = useCallback(async () => {
     if (!clinicIdentifier) {
@@ -28,7 +30,31 @@ export function useQueueSnapshot(clinicIdentifier: string | undefined, intervalM
     }
   }, [clinicIdentifier])
 
-  usePolling(load, intervalMs, Boolean(clinicIdentifier))
+  useEffect(() => {
+    if (!clinicIdentifier) return
 
-  return { data, error, loading, reload: load }
+    let connectedOnce = false
+    const channel = supabaseAnon
+      .channel(`public-queue:${clinicIdentifier}`)
+      .on('broadcast', { event: 'queue_changed' }, () => void load())
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          setRealtimeStatus('connected')
+          if (connectedOnce) void load()
+          connectedOnce = true
+          return
+        }
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          setRealtimeStatus(connectedOnce ? 'reconnecting' : 'disconnected')
+        }
+      })
+
+    const initialLoad = window.setTimeout(() => void load(), 0)
+    return () => {
+      window.clearTimeout(initialLoad)
+      void supabaseAnon.removeChannel(channel)
+    }
+  }, [clinicIdentifier, load])
+
+  return { data, error, loading, reload: load, realtimeStatus }
 }

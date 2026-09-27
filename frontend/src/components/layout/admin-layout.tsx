@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import {
   BarChart3,
@@ -20,6 +20,9 @@ import { useAuth } from '../../hooks/use-auth'
 import { useOnlineStatus } from '../../hooks/use-online-status'
 import { SidebarNav, type NavSection } from './sidebar-nav'
 import { ThemeSelector } from '../ui/theme-selector'
+import { ActivityLogsPanel } from '../ui/activity-logs-panel'
+import { useAdminRealtime } from '../../hooks/use-admin-realtime'
+import { AdminRealtimeContext } from '../../providers/admin-realtime-context'
 import { toast } from 'sonner'
 
 const sections: NavSection[] = [
@@ -64,10 +67,27 @@ export function AdminLayout() {
   const { user, logout } = useAuth()
   const [open, setOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
+  const [logsOpen, setLogsOpen] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
   const online = useOnlineStatus()
+  const organizationId = user?.clinic?.id
+  const realtime = useAdminRealtime(organizationId)
+  const activeCount = realtime.presence.filter((item) =>
+    item.presence !== 'OFFLINE' && realtime.now - new Date(item.last_seen_at).getTime() <= 90_000,
+  ).length
   const title = titles[location.pathname] || 'Admin'
+
+  useEffect(() => {
+    const onShortcut = (event: KeyboardEvent) => {
+      if (!event.ctrlKey || !event.shiftKey || !(event.key === '~' || event.code === 'Backquote')) return
+      if (event.target instanceof HTMLElement && /INPUT|TEXTAREA|SELECT/.test(event.target.tagName)) return
+      event.preventDefault()
+      setLogsOpen((value) => !value)
+    }
+    window.addEventListener('keydown', onShortcut)
+    return () => window.removeEventListener('keydown', onShortcut)
+  }, [])
 
   async function onLogout() {
     await logout()
@@ -130,6 +150,14 @@ export function AdminLayout() {
               <span className={`size-2 rounded-full ${online ? 'bg-emerald-500' : 'bg-amber-500'}`} />
               {online ? 'Online' : 'Offline'}
             </span>
+            <ActivityLogsPanel
+              events={realtime.events}
+              status={realtime.status}
+              activeCount={activeCount}
+              open={logsOpen}
+              onOpenChange={setLogsOpen}
+              onClear={realtime.clearEvents}
+            />
             <ThemeSelector />
             <div className="relative">
               <Button variant="outline" size="sm" onClick={() => setMenuOpen((value) => !value)} aria-haspopup="menu">
@@ -151,7 +179,9 @@ export function AdminLayout() {
             </div>
           </header>
           <main className="flex-1 p-4 sm:p-6">
-            <Outlet />
+            <AdminRealtimeContext.Provider value={realtime}>
+              <Outlet />
+            </AdminRealtimeContext.Provider>
           </main>
         </div>
       </div>

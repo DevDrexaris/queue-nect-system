@@ -62,11 +62,12 @@ export function JoinQueuePage() {
 
   async function onSubmit(values: JoinQueueValues) {
     try {
-      const entry = await queueService.join(clinicId, values)
+      const entry = await queueService.join(clinicId, token, values)
       writeStoredTicket({
         clinicIdentifier: clinicId,
         queueId: entry.id,
         queueNumber: entry.queueNumber,
+        statusToken: entry.statusToken,
       })
       toast.success('You joined the queue.')
       navigate(`/queue/${clinicId}/confirmed`, { state: { entry } })

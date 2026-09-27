@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom'
 import { queueService } from '../../services/api'
 import { userMessage } from '../../lib/api'
 import { readStoredTicket } from '../../lib/ticket'
-import { usePolling } from '../../hooks/use-polling'
 import { useOnlineStatus } from '../../hooks/use-online-status'
+import { useStudentQueueRealtime } from '../../hooks/use-student-presence'
 import { Card, CardContent } from '../../components/ui/card'
 import { QueueNumber } from '../../components/ui/queue-number'
 import { QueueStatusBadge } from '../../components/ui/queue-status-badge'
@@ -20,7 +20,9 @@ function headline(entry: QueueEntry) {
   if (entry.status === 'CALLED') return 'Your number is next. Please proceed to the clinic.'
   if (entry.status === 'SERVING') return 'You are currently being served.'
   if (entry.status === 'SERVED' || entry.status === 'COMPLETED') return 'Queue completed.'
-  if (entry.status === 'CANCELLED') return 'This queue request was cancelled.'
+  if (entry.status === 'CANCELLED') return entry.cancellationSource === 'ADMIN'
+    ? 'Your queue has been cancelled by staff.'
+    : 'You have left the queue.'
   if (entry.status === 'NO_SHOW') return 'Marked as no show.'
   return 'Please wait for your number to be called.'
 }
@@ -111,7 +113,11 @@ export function QueueStatusPage() {
     }
   }, [ticket])
 
-  usePolling(load, 5000, Boolean(ticket) && online)
+  useEffect(() => {
+    const initialLoad = window.setTimeout(() => void load(), 0)
+    return () => window.clearTimeout(initialLoad)
+  }, [load])
+  useStudentQueueRealtime(load, Boolean(entry && ['WAITING', 'CALLED', 'SERVING'].includes(entry.status)))
 
   useEffect(() => {
     if (typeof window !== 'undefined' && 'Notification' in window) {
@@ -182,10 +188,10 @@ export function QueueStatusPage() {
     return (
       <div className="space-y-5 text-center">
         <div className="rounded-xl border border-destructive/25 bg-destructive/10 p-6 text-foreground">
-          <p className="text-xs font-medium tracking-[0.2em] uppercase text-destructive">Queue cancelled</p>
+          <p className="text-xs font-medium tracking-[0.2em] uppercase text-destructive">Queue Cancelled</p>
           <h1 className="mt-3 text-2xl font-semibold">Thank you for visiting.</h1>
           <p className="mt-3 text-sm leading-6 text-muted-foreground">
-            Your queue number has been cancelled successfully. Please scan the QR code again when you are ready to get a new queue number.
+            {entry.cancellationSource === 'ADMIN' ? 'Your queue has been cancelled by staff.' : 'You have left the queue.'}
           </p>
         </div>
 

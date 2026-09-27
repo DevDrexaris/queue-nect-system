@@ -53,7 +53,7 @@ export function AdminDashboardPage() {
     }
   }
 
-  async function act(entry: QueueEntry, action: 'serve' | 'skip' | 'cancel' | 'recall' | 'stop_call') {
+  async function act(entry: QueueEntry, action: 'complete' | 'skip' | 'cancel') {
     try {
       await queueService.updateStatus(entry.id, action)
       toast.success(`Updated ${entry.queueNumber}`)
@@ -146,23 +146,9 @@ export function AdminDashboardPage() {
                 <p className="mt-2 text-sm font-medium">{serving.studentName}</p>
                 <p className="text-sm text-muted-foreground">{serving.purpose}</p>
                 <div className="mt-4 flex flex-wrap gap-2">
-                  {serving.status === 'CALLED' ? (
-                    <Button variant="outline" onClick={() => void act(serving, 'stop_call')}>
-                      Stop calling
-                    </Button>
-                  ) : null}
-                  <Button onClick={() => void act(serving, 'serve')}>Finish service</Button>
-                  <Button variant="outline" onClick={() => void act(serving, 'skip')}>
-                    Skip
-                  </Button>
-                  <Button variant="outline" className="border-status-waiting/30 bg-status-waiting/10 text-status-waiting hover:bg-status-waiting/15" onClick={() => void act(serving, 'recall')}>
-                    <span className="inline-flex items-center gap-1.5">
-                      <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4">
-                        <path d="M12 6v6l4 2m4-2a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
-                      </svg>
-                      Set waiting
-                    </span>
-                  </Button>
+                  {serving.status === 'SERVING' ? <Button onClick={() => void act(serving, 'complete')}>Finish service</Button> : null}
+                  {serving.status === 'SERVING' ? <Button variant="destructive" onClick={() => void act(serving, 'cancel')}>Cancel queue</Button> : null}
+                  {serving.status === 'CALLED' ? <Button variant="outline" onClick={() => void act(serving, 'skip')}>Mark no-show</Button> : null}
                 </div>
               </div>
             ) : (
@@ -224,17 +210,13 @@ export function AdminDashboardPage() {
                         </TD>
                         <TD>
                           <ActionMenu>
-                            {['WAITING', 'NO_SHOW'].includes(item.status) ? (
+                            {item.status === 'WAITING' ? (
                               <ActionItem onClick={() => void queueService.updateStatus(item.id, 'call').then(reload)}>Call</ActionItem>
                             ) : null}
-                            <ActionItem onClick={() => void act(item, 'serve')}>Serve</ActionItem>
-                            {['COMPLETED', 'SERVED', 'NO_SHOW'].includes(item.status) ? (
-                              <ActionItem onClick={() => void act(item, 'recall')}>Restore to waiting</ActionItem>
-                            ) : null}
-                            <ActionItem onClick={() => void act(item, 'skip')}>Skip</ActionItem>
-                            <ActionItem destructive onClick={() => void act(item, 'cancel')}>
-                              Cancel
-                            </ActionItem>
+                            {item.status === 'CALLED' ? <ActionItem onClick={() => void queueService.updateStatus(item.id, 'serve').then(reload)}>Start service</ActionItem> : null}
+                            {item.status === 'SERVING' ? <ActionItem onClick={() => void act(item, 'complete')}>Complete service</ActionItem> : null}
+                            {['WAITING', 'CALLED'].includes(item.status) ? <ActionItem onClick={() => void act(item, 'skip')}>Mark no-show</ActionItem> : null}
+                            {['WAITING', 'CALLED', 'SERVING'].includes(item.status) ? <ActionItem destructive onClick={() => void act(item, 'cancel')}>Cancel queue</ActionItem> : null}
                           </ActionMenu>
                         </TD>
                       </TR>

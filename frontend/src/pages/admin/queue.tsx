@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { Lock, RefreshCw } from 'lucide-react'
+import { RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '../../components/ui/button'
 import { Dialog } from '../../components/ui/dialog'
 import { PageHeader } from '../../components/ui/page-header'
 import { QueueNumber } from '../../components/ui/queue-number'
 import { QueueStatusBadge } from '../../components/ui/queue-status-badge'
+import { QueuePresenceBadge } from '../../components/ui/queue-presence-badge'
 import { SearchInput } from '../../components/ui/search-input'
 import { Select } from '../../components/ui/select'
 import { EmptyState, ErrorState, LoadingState } from '../../components/ui/states'
@@ -14,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/ca
 import { TBody, TD, TH, THead, TR, Table } from '../../components/ui/table'
 import { useAuth } from '../../hooks/use-auth'
 import { useQueueSnapshot } from '../../hooks/use-queue-snapshot'
+import { useAdminRealtimeContext } from '../../hooks/use-admin-realtime-context'
 import { formatTime, formatWait } from '../../lib/format'
 import { userMessage } from '../../lib/api'
 import { queueService } from '../../services/api'
@@ -23,11 +25,11 @@ export function AdminQueuePage() {
   const { user } = useAuth()
   const clinicId = user?.clinic?.identifier
   const { data, error, loading, reload } = useQueueSnapshot(clinicId, 8000)
+  const realtime = useAdminRealtimeContext()
+  const presenceById = new Map(realtime.presence.map((item) => [item.queue_entry_id, item]))
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<string>('all')
   const [pending, setPending] = useState<QueueEntry | null>(null)
-  const [deleteTarget, setDeleteTarget] = useState<QueueEntry | null>(null)
-  const [deleteConfirmed, setDeleteConfirmed] = useState(false)
   const [resetting, setResetting] = useState(false)
   const [resetPending, setResetPending] = useState(false)
   const [resetConfirmed, setResetConfirmed] = useState(false)
@@ -68,23 +70,11 @@ export function AdminQueuePage() {
     }
   }
 
-  async function run(action: 'call' | 'serve' | 'skip' | 'cancel' | 'recall' | 'stop_call', entry: QueueEntry) {
+  async function run(action: 'call' | 'serve' | 'complete' | 'skip' | 'cancel', entry: QueueEntry) {
     try {
       await queueService.updateStatus(entry.id, action)
       toast.success(`Updated ${entry.queueNumber}`)
       setPending(null)
-      await reload()
-    } catch (caught) {
-      toast.error(userMessage(caught))
-    }
-  }
-
-  async function removeQueueEntry(entry: QueueEntry) {
-    try {
-      await queueService.deleteEntry(entry.id)
-      toast.success(`Deleted ${entry.queueNumber}`)
-      setDeleteTarget(null)
-      setDeleteConfirmed(false)
       await reload()
     } catch (caught) {
       toast.error(userMessage(caught))
@@ -96,7 +86,7 @@ export function AdminQueuePage() {
     setResetting(true)
     try {
       await queueService.resetQueue(clinicId)
-      toast.success('Queue reset to A001')
+      toast.success('Active entries cancelled; queue numbers remain reserved.')
       setResetPending(false)
       setResetConfirmed(false)
       await reload()
@@ -151,7 +141,7 @@ export function AdminQueuePage() {
               ) : null}
             </div>
             <Button size="sm" variant="destructive" onClick={() => setResetPending(true)} loading={resetting}>
-              {resetting ? 'Resetting...' : 'Reset queue'}
+              {resetting ? 'Cancelling...' : 'Cancel active'}
             </Button>
           </div>
         }
@@ -186,23 +176,8 @@ export function AdminQueuePage() {
                 <p className="mt-1 text-xs text-muted-foreground">Started: {formatTime(serving.calledAt)}</p>
               </div>
               <div className="flex flex-wrap gap-2">
-                {serving.status === 'CALLED' ? (
-                  <Button variant="outline" onClick={() => void run('stop_call', serving)}>
-                    Stop calling
-                  </Button>
-                ) : null}
-                <Button onClick={() => void run('serve', serving)}>Finish service</Button>
-                <Button variant="outline" onClick={() => void run('skip', serving)}>
-                  Skip
-                </Button>
-                <Button variant="outline" className="border-status-waiting/30 bg-status-waiting/10 text-status-waiting hover:bg-status-waiting/15" onClick={() => void run('recall', serving)}>
-                  <span className="inline-flex items-center gap-1.5">
-                    <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4">
-                      <path d="M12 6v6l4 2m4-2a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
-                    </svg>
-                    Set waiting
-                  </span>
-                </Button>
+                {serving.status === 'SERVING' ? <Button onClick={() => void run('complete', serving)}>Finish service</Button> : null}
+                {serving.status === 'CALLED' ? <Button variant="outline" onClick={() => void run('skip', serving)}>Mark no-show</Button> : null}
               </div>
               </div>
             </div>
@@ -266,29 +241,19 @@ export function AdminQueuePage() {
                     <TD>{formatWait(item.estimatedWaitMinutes)}</TD>
                     <TD>
                       <QueueStatusBadge status={item.status as QueueStatus} />
+                      <div className="mt-1"><QueuePresenceBadge presence={presenceById.get(item.id)} now={realtime.now} /></div>
                     </TD>
                     <TD>
                       <ActionMenu label="Manage">
-                        {item.status === 'CALLED' ? (
-                          <ActionItem onClick={() => void run('stop_call', item)}>Stop calling</ActionItem>
-                        ) : null}
-                        {['WAITING', 'NO_SHOW'].includes(item.status) ? (
+                        {item.status === 'WAITING' ? (
                           <ActionItem onClick={() => void run('call', item)}>Call</ActionItem>
                         ) : null}
-                        {['COMPLETED', 'SERVED', 'NO_SHOW'].includes(item.status) ? (
-                          <ActionItem onClick={() => void run('recall', item)}>Restore to waiting</ActionItem>
+                        {item.status === 'CALLED' ? <ActionItem onClick={() => void run('serve', item)}>Start service</ActionItem> : null}
+                        {item.status === 'SERVING' ? <ActionItem onClick={() => void run('complete', item)}>Complete service</ActionItem> : null}
+                        {['WAITING', 'CALLED'].includes(item.status) ? <ActionItem onClick={() => void run('skip', item)}>Mark no-show</ActionItem> : null}
+                        {['WAITING', 'CALLED', 'SERVING'].includes(item.status) ? (
+                          <ActionItem destructive onClick={() => setPending(item)}>Cancel</ActionItem>
                         ) : null}
-                        <ActionItem destructive onClick={() => setPending(item)}>
-                          Cancel
-                        </ActionItem>
-                        <ActionItem
-                          destructive
-                          disabled={['WAITING', 'CALLED', 'SERVING'].includes(item.status)}
-                          icon={<Lock className="size-4" />}
-                          onClick={() => setDeleteTarget(item)}
-                        >
-                          Delete
-                        </ActionItem>
                       </ActionMenu>
                     </TD>
                   </TR>
@@ -302,26 +267,15 @@ export function AdminQueuePage() {
                 <div className="flex items-start justify-between gap-3">
                   <QueueNumber value={item.queueNumber} size="sm" className={item.status === 'CALLED' ? 'queue-number-calling' : undefined} />
                   <ActionMenu label="Manage">
-                    {item.status === 'CALLED' ? (
-                      <ActionItem onClick={() => void run('stop_call', item)}>Stop calling</ActionItem>
-                    ) : null}
-                    {['WAITING', 'NO_SHOW'].includes(item.status) ? (
+                    {item.status === 'WAITING' ? (
                       <ActionItem onClick={() => void run('call', item)}>Call</ActionItem>
                     ) : null}
-                    {['COMPLETED', 'SERVED', 'NO_SHOW'].includes(item.status) ? (
-                      <ActionItem onClick={() => void run('recall', item)}>Restore to waiting</ActionItem>
+                    {item.status === 'CALLED' ? <ActionItem onClick={() => void run('serve', item)}>Start service</ActionItem> : null}
+                    {item.status === 'SERVING' ? <ActionItem onClick={() => void run('complete', item)}>Complete service</ActionItem> : null}
+                    {['WAITING', 'CALLED'].includes(item.status) ? <ActionItem onClick={() => void run('skip', item)}>Mark no-show</ActionItem> : null}
+                    {['WAITING', 'CALLED', 'SERVING'].includes(item.status) ? (
+                      <ActionItem destructive onClick={() => setPending(item)}>Cancel</ActionItem>
                     ) : null}
-                    <ActionItem destructive onClick={() => setPending(item)}>
-                      Cancel
-                    </ActionItem>
-                    <ActionItem
-                      destructive
-                      disabled={['WAITING', 'CALLED', 'SERVING'].includes(item.status)}
-                      icon={<Lock className="size-4" />}
-                      onClick={() => setDeleteTarget(item)}
-                    >
-                      Delete
-                    </ActionItem>
                   </ActionMenu>
                 </div>
                 <p className="mt-2 font-medium">{item.studentName}</p>
@@ -330,6 +284,7 @@ export function AdminQueuePage() {
                   <QueueStatusBadge status={item.status} />
                   <span className="text-xs text-muted-foreground">Waited {formatWait(item.estimatedWaitMinutes)}</span>
                 </div>
+                <div className="mt-2"><QueuePresenceBadge presence={presenceById.get(item.id)} now={realtime.now} /></div>
               </div>
             ))}
           </div>
@@ -342,7 +297,7 @@ export function AdminQueuePage() {
         title="Cancel this queue?"
         description={
           pending
-            ? `${pending.queueNumber} will be removed from the active queue. This cannot be undone.`
+            ? `${pending.queueNumber} will be cancelled and retained in queue history. It cannot be restored.`
             : undefined
         }
         footer={
@@ -358,49 +313,13 @@ export function AdminQueuePage() {
       />
 
       <Dialog
-        open={Boolean(deleteTarget)}
-        onClose={() => {
-          setDeleteTarget(null)
-          setDeleteConfirmed(false)
-        }}
-        title="Delete inactive queue number?"
-        description={deleteTarget ? `This permanently removes ${deleteTarget.queueNumber} from the queue log. Only do this for numbers that are already cancelled, skipped, or otherwise no longer needed.` : undefined}
-        footer={
-          <>
-            <Button variant="outline" onClick={() => { setDeleteTarget(null); setDeleteConfirmed(false) }}>
-              Cancel
-            </Button>
-            <Button
-              variant="destructive"
-              disabled={!deleteConfirmed || !deleteTarget}
-              onClick={() => deleteTarget && void removeQueueEntry(deleteTarget)}
-            >
-              Delete permanently
-            </Button>
-          </>
-        }
-      >
-        <label className="mt-2 flex items-start gap-3 rounded-lg border border-border bg-muted/40 p-3 text-sm text-foreground">
-          <input
-            type="checkbox"
-            checked={deleteConfirmed}
-            onChange={(event) => setDeleteConfirmed(event.target.checked)}
-            className="mt-1 size-4"
-          />
-          <span>
-            I confirm this queue number is inactive and I want to permanently delete it from the session.
-          </span>
-        </label>
-      </Dialog>
-
-      <Dialog
         open={resetPending}
         onClose={() => {
           setResetPending(false)
           setResetConfirmed(false)
         }}
-        title="Reset today’s queue?"
-        description="This permanently clears all current queue entries for today and resets the counter back to A001. This should only be used when you are starting a fresh queue session or have finished the day’s queue and want to restart cleanly."
+        title="Cancel all active entries?"
+        description="Waiting and called entries will be cancelled and retained in queue history. Queue numbers will not be reused. New students may still join this session."
         footer={
           <>
             <Button variant="outline" onClick={() => { setResetPending(false); setResetConfirmed(false) }}>
@@ -411,7 +330,7 @@ export function AdminQueuePage() {
               disabled={!resetConfirmed || resetting}
               onClick={() => void resetQueue()}
             >
-              {resetting ? 'Resetting...' : 'I understand, reset queue'}
+              {resetting ? 'Cancelling...' : 'Cancel active entries'}
             </Button>
           </>
         }
@@ -424,7 +343,7 @@ export function AdminQueuePage() {
             className="mt-1 size-4"
           />
           <span>
-            I confirm this is a fresh start for the queue and understand that all active queue entries for today will be cleared.
+            I understand active entries will be cancelled and queue numbers will remain reserved.
           </span>
         </label>
       </Dialog>

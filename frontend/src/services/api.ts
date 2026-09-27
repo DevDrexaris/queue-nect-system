@@ -1,5 +1,6 @@
 import { getQueueJoinUrl } from '../lib/env'
 import { supabase, supabaseAnon } from '../lib/supabase'
+import { readStoredTicket, writeStoredTicket } from '../lib/ticket'
 import type {
   AdminAccount,
   Clinic,
@@ -384,11 +385,10 @@ export const queueService = {
     }
 
     const client = await getQueueClient()
-    const { data: entries, error } = await client
-      .from('queue_entries')
-      .select('*')
-      .eq('organization_id', org.id)
-      .order('joined_at', { ascending: true })
+    const entriesQuery = client === supabase
+      ? client.from('queue_entries').select('*').eq('organization_id', org.id)
+      : client.from('public_queue_snapshot').select('*').eq('organization_id', org.id)
+    const { data: entries, error } = await entriesQuery.order('joined_at', { ascending: true })
 
     if (error) throw error
 
@@ -400,11 +400,11 @@ export const queueService = {
         id: entry.id,
         clinicId: org.id,
         queueNumber: entry.queue_number,
-        studentId: entry.student_id,
-        studentName: entry.full_name,
-        course: entry.course,
-        yearLevel: entry.year_level,
-        purpose: entry.purpose,
+        studentId: 'student_id' in entry ? entry.student_id : undefined,
+        studentName: 'full_name' in entry ? entry.full_name : undefined,
+        course: 'course' in entry ? entry.course : undefined,
+        yearLevel: 'year_level' in entry ? entry.year_level : undefined,
+        purpose: 'purpose' in entry ? entry.purpose : undefined,
         status: entry.status,
         joinedAt: entry.joined_at,
         calledAt: entry.called_at,
@@ -443,120 +443,79 @@ export const queueService = {
   },
 
   getEntry: async (clinicIdentifier: string, queueId: string): Promise<QueueEntry> => {
-    const { data: org } = await getOrgIdFromClinicIdentifier(clinicIdentifier)
-    if (!org) throw new Error('Clinic not found.')
-
-    const client = await getQueueClient()
-    const { data, error } = await client
-      .from('queue_entries')
-      .select('*')
-      .eq('organization_id', org.id)
-      .eq('id', queueId)
-      .single()
-
+    const ticket = readStoredTicket()
+    if (!ticket || ticket.queueId !== queueId || ticket.clinicIdentifier !== clinicIdentifier) {
+      throw new Error('Queue access is invalid or expired.')
+    }
+    let statusToken = ticket.statusToken
+    if (!statusToken) {
+      const upgrade = await supabaseAnon.rpc('exchange_legacy_queue_ticket', {
+        p_queue_entry_id: ticket.queueId,
+        p_queue_number: ticket.queueNumber,
+        p_public_identifier: ticket.clinicIdentifier,
+      })
+      if (upgrade.error) throw upgrade.error
+      statusToken = upgrade.data
+      writeStoredTicket({ ...ticket, statusToken })
+    }
+    const { data, error } = await supabaseAnon.rpc('get_student_queue_entry', { p_status_token: statusToken })
     if (error) throw error
-
-    const snapshot = await queueService.getSnapshot(clinicIdentifier)
-    const peopleAhead = countPeopleAhead(
-      snapshot.entries.map((entry) => ({ id: entry.id, status: entry.status, joined_at: entry.joinedAt })),
-      data.id,
-      data.joined_at,
-    )
+    const row = data.entry
 
     return {
-      id: data.id,
-      clinicId: data.organization_id,
-      queueNumber: data.queue_number,
-      studentId: data.student_id,
-      studentName: data.full_name,
-      course: data.course,
-      yearLevel: data.year_level,
-      purpose: data.purpose,
-      status: data.status,
-      joinedAt: data.joined_at,
-      calledAt: data.called_at,
-      servedAt: data.started_at ?? data.completed_at,
-      peopleAhead,
-      estimatedWaitMinutes: ['WAITING', 'CALLED'].includes(data.status) ? getElapsedMinutes(data.joined_at) : null,
+      id: row.id,
+      clinicId: row.organization_id,
+      queueNumber: row.queue_number,
+      studentId: row.student_id,
+      studentName: row.full_name,
+      course: row.course,
+      yearLevel: row.year_level,
+      purpose: row.purpose,
+      status: row.status,
+      cancellationSource: row.cancellation_source,
+      joinedAt: row.joined_at,
+      calledAt: row.called_at,
+      servedAt: row.started_at ?? row.completed_at,
+      peopleAhead: data.people_ahead,
+      estimatedWaitMinutes: ['WAITING', 'CALLED'].includes(row.status) ? getElapsedMinutes(row.joined_at) : null,
     }
   },
 
-  join: async (clinicIdentifier: string, payload: JoinQueuePayload): Promise<QueueEntry> => {
-    const { data: org, error: orgError } = await getOrgIdFromClinicIdentifier(clinicIdentifier)
-    if (orgError) throw orgError
-    if (!org) throw new Error('Clinic not found.')
-
-    const today = new Date().toISOString().slice(0, 10)
-    const { data: session, error: sessionError } = await supabaseAnon
-      .from('queue_sessions')
-      .select('*')
-      .eq('organization_id', org.id)
-      .eq('session_date', today)
-      .eq('is_active', true)
-      .maybeSingle()
-
-    if (sessionError) throw sessionError
-    if (!session) {
-      throw new Error('This clinic queue is not open yet. Please ask staff to start the queue session.')
-    }
-
-    const { data, error } = await supabaseAnon
-      .from('queue_entries')
-      .insert({
-        organization_id: org.id,
-        queue_session_id: session.id,
-        student_id: payload.studentId,
-        full_name: payload.fullName,
-        course: payload.course,
-        year_level: payload.yearLevel,
-        purpose: payload.purpose,
-        status: 'WAITING',
-      })
-      .select('*')
-      .single()
-
+  join: async (clinicIdentifier: string, accessToken: string, payload: JoinQueuePayload): Promise<QueueEntry & { statusToken: string }> => {
+    const { data, error } = await supabaseAnon.rpc('join_queue_with_status_token', {
+      p_public_identifier: clinicIdentifier,
+      p_qr_token: accessToken,
+      p_student_id: payload.studentId,
+      p_full_name: payload.fullName,
+      p_course: payload.course,
+      p_year_level: payload.yearLevel,
+      p_purpose: payload.purpose,
+    })
     if (error) throw error
 
-    const peopleAhead = countPeopleAhead(
-      (await queueService.getSnapshot(clinicIdentifier)).entries.map((entry) => ({ id: entry.id, status: entry.status, joined_at: entry.joinedAt })),
-      data.id,
-      data.joined_at,
-    )
-
+    const entry = data.entry
     return {
-      id: data.id,
-      clinicId: data.organization_id,
-      queueNumber: data.queue_number,
-      studentId: data.student_id,
-      studentName: data.full_name,
-      course: data.course,
-      yearLevel: data.year_level,
-      purpose: data.purpose,
-      status: data.status,
-      joinedAt: data.joined_at,
-      calledAt: data.called_at,
-      servedAt: data.started_at ?? data.completed_at,
-      peopleAhead,
-      estimatedWaitMinutes: ['WAITING', 'CALLED'].includes(data.status) ? getElapsedMinutes(data.joined_at) : null,
+      id: entry.id,
+      clinicId: entry.organization_id,
+      queueNumber: entry.queue_number,
+      studentId: entry.student_id,
+      studentName: entry.full_name,
+      course: entry.course,
+      yearLevel: entry.year_level,
+      purpose: entry.purpose,
+      status: entry.status,
+      joinedAt: entry.joined_at,
+      calledAt: entry.called_at,
+      servedAt: entry.started_at ?? entry.completed_at,
+      peopleAhead: 0,
+      estimatedWaitMinutes: 0,
+      statusToken: data.status_token,
     }
   },
 
   callNext: async (clinicIdentifier: string): Promise<QueueEntry> => {
     const { data: org } = await getOrgIdFromClinicIdentifier(clinicIdentifier)
     if (!org) throw new Error('Clinic not found.')
-
-    const { data: active } = await supabase
-      .from('queue_entries')
-      .select('id, status')
-      .eq('organization_id', org.id)
-      .in('status', ['CALLED', 'SERVING'])
-      .limit(1)
-      .maybeSingle()
-
-    if (active) {
-      throw new Error('A queue number is already active. Finish or stop the current call before calling the next one.')
-    }
-
     const { data: waiting } = await supabase
       .from('queue_entries')
       .select('*')
@@ -567,49 +526,12 @@ export const queueService = {
       .maybeSingle()
 
     if (!waiting) throw new Error('No waiting queue.')
-
-    const { data, error } = await supabase
-      .from('queue_entries')
-      .update({ status: 'CALLED', called_at: new Date().toISOString(), updated_at: new Date().toISOString() })
-      .eq('id', waiting.id)
-      .select('*')
-      .single()
-
-    if (error) throw error
-
-    return {
-      id: data.id,
-      clinicId: data.organization_id,
-      queueNumber: data.queue_number,
-      studentId: data.student_id,
-      studentName: data.full_name,
-      course: data.course,
-      yearLevel: data.year_level,
-      purpose: data.purpose,
-      status: data.status,
-      joinedAt: data.joined_at,
-      calledAt: data.called_at,
-      servedAt: data.started_at ?? data.completed_at,
-      peopleAhead: 0,
-      estimatedWaitMinutes: null,
-    }
+    return queueService.updateStatus(waiting.id, 'call')
   },
 
   serveNext: async (clinicIdentifier: string): Promise<QueueEntry> => {
     const { data: org } = await getOrgIdFromClinicIdentifier(clinicIdentifier)
     if (!org) throw new Error('Clinic not found.')
-
-    const { data: activeServing } = await supabase
-      .from('queue_entries')
-      .select('id, status')
-      .eq('organization_id', org.id)
-      .eq('status', 'SERVING')
-      .limit(1)
-      .maybeSingle()
-
-    if (activeServing) {
-      throw new Error('A student is already being served. Finish the current service before serving another number.')
-    }
 
     const { data: target } = await supabase
       .from('queue_entries')
@@ -622,91 +544,17 @@ export const queueService = {
       .maybeSingle()
 
     if (!target) throw new Error('No called number is ready to serve.')
-
-    const { data, error } = await supabase
-      .from('queue_entries')
-      .update({
-        status: 'SERVING',
-        called_at: target.called_at ?? new Date().toISOString(),
-        started_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', target.id)
-      .select('*')
-      .single()
-
-    if (error) throw error
-
-    return {
-      id: data.id,
-      clinicId: data.organization_id,
-      queueNumber: data.queue_number,
-      studentId: data.student_id,
-      studentName: data.full_name,
-      course: data.course,
-      yearLevel: data.year_level,
-      purpose: data.purpose,
-      status: data.status,
-      joinedAt: data.joined_at,
-      calledAt: data.called_at,
-      servedAt: data.started_at ?? data.completed_at,
-      peopleAhead: 0,
-      estimatedWaitMinutes: null,
-    }
+    return queueService.updateStatus(target.id, 'serve')
   },
 
   cancelEntry: async (clinicIdentifier: string, queueId: string) => {
-    const { data: org, error: orgError } = await getOrgIdFromClinicIdentifier(clinicIdentifier)
-    if (orgError) throw orgError
-    if (!org) throw new Error('Clinic not found.')
-
-    const { data: current, error: currentError } = await supabase
-      .from('queue_entries')
-      .select('*')
-      .eq('organization_id', org.id)
-      .eq('id', queueId)
-      .single()
-
-    if (currentError) throw currentError
-    if (!['WAITING', 'CALLED'].includes(current.status)) {
-      throw new Error('This queue number can no longer be cancelled.')
+    const ticket = readStoredTicket()
+    if (!ticket?.statusToken || ticket.queueId !== queueId || ticket.clinicIdentifier !== clinicIdentifier) {
+      throw new Error('Queue access is invalid or expired.')
     }
-
-    const { data, error } = await supabase
-      .from('queue_entries')
-      .update({
-        status: 'CANCELLED',
-        cancelled_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', queueId)
-      .select('*')
-      .single()
-
+    const { data, error } = await supabaseAnon.rpc('cancel_student_queue', { p_status_token: ticket.statusToken })
     if (error) throw error
     return data
-  },
-
-  deleteEntry: async (queueId: string) => {
-    const { data: existing, error: fetchError } = await supabase
-      .from('queue_entries')
-      .select('*')
-      .eq('id', queueId)
-      .single()
-
-    if (fetchError) throw fetchError
-    if (['WAITING', 'CALLED', 'SERVING'].includes(existing.status)) {
-      throw new Error('Active queue numbers cannot be deleted. Finish, skip, or cancel them first.')
-    }
-
-    const { error } = await supabase
-      .from('queue_entries')
-      .delete()
-      .eq('id', queueId)
-
-    if (error) throw error
-
-    return existing
   },
 
   resetQueue: async (clinicIdentifier: string) => {
@@ -728,80 +576,33 @@ export const queueService = {
       throw new Error('There is no active queue session for today to reset.')
     }
 
-    const { error: deleteError } = await supabase
-      .from('queue_entries')
-      .delete()
-      .eq('organization_id', org.id)
-      .eq('queue_session_id', session.id)
-
-    if (deleteError) throw deleteError
-
-    const { error: resetError } = await supabase
-      .from('queue_sessions')
-      .update({ next_number: 1, updated_at: new Date().toISOString() })
-      .eq('id', session.id)
-
-    if (resetError) throw resetError
-
-    return { queueSessionId: session.id, queuePrefix: org.queue_prefix }
+    const { data, error } = await supabase.rpc('reset_queue_session', { p_organization_id: org.id })
+    if (error) throw error
+    return { queueSessionId: session.id, queuePrefix: org.queue_prefix, cancelledEntries: data }
   },
 
-  updateStatus: async (queueId: string, action: 'call' | 'serve' | 'skip' | 'cancel' | 'recall' | 'stop_call') => {
-    const map: Record<string, Partial<any>> = {
-      call: {
-        status: 'CALLED',
-        called_at: new Date().toISOString(),
-        started_at: null,
-        completed_at: null,
-        cancelled_at: null,
-        no_show_at: null,
-      },
-      serve: { status: 'COMPLETED', completed_at: new Date().toISOString(), started_at: new Date().toISOString() },
-      stop_call: {
-        status: 'SERVING',
-        called_at: new Date().toISOString(),
-        started_at: new Date().toISOString(),
-        completed_at: null,
-        cancelled_at: null,
-        no_show_at: null,
-      },
-      skip: { status: 'NO_SHOW', no_show_at: new Date().toISOString() },
-      cancel: { status: 'CANCELLED', cancelled_at: new Date().toISOString() },
-      recall: {
-        status: 'WAITING',
-        called_at: null,
-        started_at: null,
-        completed_at: null,
-        cancelled_at: null,
-        no_show_at: null,
-      },
-    }
-
-    const payload = map[action]
-    if (!payload) throw new Error('Invalid action.')
-
-    const { data, error } = await supabase
-      .from('queue_entries')
-      .update({ ...payload, updated_at: new Date().toISOString() })
-      .eq('id', queueId)
-      .select('*')
-      .single()
-
+  updateStatus: async (queueId: string, action: 'call' | 'serve' | 'complete' | 'skip' | 'cancel') => {
+    const { data, error } = await supabase.rpc('transition_queue_entry', {
+      p_queue_entry_id: queueId,
+      p_action: action,
+    })
     if (error) throw error
 
+    const row = data
+
     return {
-      id: data.id,
-      clinicId: data.organization_id,
-      queueNumber: data.queue_number,
-      studentId: data.student_id,
-      studentName: data.full_name,
-      course: data.course,
-      yearLevel: data.year_level,
-      purpose: data.purpose,
-      status: data.status,
-      joinedAt: data.joined_at,
-      calledAt: data.called_at,
-      servedAt: data.started_at ?? data.completed_at,
+      id: row.id,
+      clinicId: row.organization_id,
+      queueNumber: row.queue_number,
+      studentId: row.student_id,
+      studentName: row.full_name,
+      course: row.course,
+      yearLevel: row.year_level,
+      purpose: row.purpose,
+      status: row.status,
+      joinedAt: row.joined_at,
+      calledAt: row.called_at,
+      servedAt: row.started_at ?? row.completed_at,
       peopleAhead: 0,
       estimatedWaitMinutes: null,
     }

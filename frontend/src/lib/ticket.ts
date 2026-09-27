@@ -4,6 +4,7 @@ export type StoredTicket = {
   clinicIdentifier: string
   queueId: string
   queueNumber: string
+  statusToken?: string
 }
 
 export function readStoredTicket(): StoredTicket | null {
