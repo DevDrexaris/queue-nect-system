@@ -3,7 +3,7 @@ import { Card, CardContent } from '../../components/ui/card'
 import { QueueNumber } from '../../components/ui/queue-number'
 import { QueueStatusBadge } from '../../components/ui/queue-status-badge'
 import { buttonVariants } from '../../components/ui/button'
-import { formatWait } from '../../lib/format'
+import { formatElapsedMinutes } from '../../lib/format'
 import { cn } from '../../lib/utils'
 import type { QueueEntry } from '../../types'
 
@@ -13,6 +13,8 @@ export function QueueSuccessPage() {
   const entry = (location.state as { entry?: QueueEntry } | null)?.entry
 
   if (!entry) return <Navigate to={`/queue/${clinicId}`} replace />
+
+  const isCompleted = entry.status === 'COMPLETED' || entry.status === 'SERVED'
 
   return (
     <div className="space-y-6 text-center">
@@ -31,8 +33,10 @@ export function QueueSuccessPage() {
             <p className="mt-1 font-mono text-2xl font-semibold tabular-nums">{entry.peopleAhead ?? '—'}</p>
           </div>
           <div>
-            <p className="text-xs text-muted-foreground uppercase">Estimated wait</p>
-            <p className="mt-1 text-2xl font-semibold">{formatWait(entry.estimatedWaitMinutes)}</p>
+            <p className="text-xs text-muted-foreground uppercase">{isCompleted ? 'Time spent' : 'Waiting time'}</p>
+            <p className="mt-1 text-2xl font-semibold">
+              {isCompleted ? formatElapsedMinutes(entry.joinedAt, entry.servedAt ?? undefined) : formatElapsedMinutes(entry.joinedAt)}
+            </p>
           </div>
           <div className="col-span-2">
             <p className="text-xs text-muted-foreground uppercase">Status</p>
