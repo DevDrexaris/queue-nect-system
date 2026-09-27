@@ -89,11 +89,12 @@ export function AdminDashboardPage() {
         title={`${greetingForNow()}, ${user?.name || 'Admin'}`}
         description={user?.clinic?.name}
         actions={
-          <div className="flex flex-wrap gap-2">
-            <Button onClick={() => void callNext()} loading={calling}>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button size="sm" onClick={() => void callNext()} loading={calling}>
               {calling ? 'Calling...' : 'Call next'}
             </Button>
             <Button
+              size="sm"
               variant={calledEntry ? 'default' : 'outline'}
               className={calledEntry ? 'border-emerald-500 bg-emerald-600 text-white shadow-[0_0_18px_rgba(16,185,129,0.45)] ring-2 ring-emerald-300/70 animate-pulse' : ''}
               onClick={() => void serveNext()}
@@ -123,12 +124,12 @@ export function AdminDashboardPage() {
                 <p className="mt-2 text-sm font-medium">{serving.studentName}</p>
                 <p className="text-sm text-muted-foreground">{serving.purpose}</p>
                 {serving.status === 'CALLED' ? (
-                  <div className="mt-4 flex items-center justify-between gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                  <div className="mt-4 flex w-fit max-w-full flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
                     <span className="inline-flex items-center gap-2">
                       <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
                       Serve next number now
                     </span>
-                    <Button className="h-8 bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => void serveNext()}>
+                    <Button size="sm" className="shrink-0 bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => void serveNext()}>
                       Serve now
                     </Button>
                   </div>
