@@ -4,7 +4,7 @@ import QRCode from 'qrcode'
 import { Logo } from '../../components/brand/logo'
 import { QueueNumber } from '../../components/ui/queue-number'
 import { useQueueSnapshot } from '../../hooks/use-queue-snapshot'
-import { getQueueJoinUrl } from '../../lib/env'
+import { queueService } from '../../services/api'
 import { cn } from '../../lib/utils'
 
 const VOICE_KEY = 'qn.display.voice'
@@ -27,12 +27,23 @@ export function TvDisplayPage() {
 
   useEffect(() => {
     if (!identifier) return
-    QRCode.toDataURL(getQueueJoinUrl(identifier), {
-      errorCorrectionLevel: 'H',
-      margin: 1,
-      width: 220,
-      color: { dark: '#0B2A4A', light: '#ffffff' },
-    }).then(setQr)
+
+    async function generateQr() {
+      try {
+        const { link } = await queueService.issueAccessToken(identifier)
+        const dataUrl = await QRCode.toDataURL(link, {
+          errorCorrectionLevel: 'H',
+          margin: 1,
+          width: 220,
+          color: { dark: '#0B2A4A', light: '#ffffff' },
+        })
+        setQr(dataUrl)
+      } catch {
+        setQr('')
+      }
+    }
+
+    void generateQr()
   }, [identifier])
 
   const serving = data?.nowServing

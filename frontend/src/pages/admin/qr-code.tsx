@@ -34,6 +34,11 @@ export function AdminQrCodePage() {
   }, [identifier])
 
   const preview = useMemo(() => getQueueJoinUrl(identifier, token), [identifier, token])
+  const displayUrl = useMemo(() => `/display/${encodeURIComponent(identifier)}`, [identifier])
+
+  function openTvDisplay() {
+    window.open(displayUrl, '_blank', 'noopener,noreferrer')
+  }
 
   async function regenerate() {
     try {
@@ -86,6 +91,9 @@ export function AdminQrCodePage() {
             <Button variant="outline" onClick={download} disabled={!preview}>
               <Download className="size-4" />
               Download QR
+            </Button>
+            <Button variant="secondary" onClick={openTvDisplay}>
+              Open TV Display
             </Button>
             <Button onClick={() => void regenerate()} loading={regenerating}>
               <RefreshCw className="size-4" />

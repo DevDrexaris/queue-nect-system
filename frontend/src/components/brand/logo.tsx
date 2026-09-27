@@ -35,8 +35,8 @@ export function BrandName({ className, size = 'md', inverted = false }: BrandPro
   return (
     <span
       className={cn(
-        'font-semibold tracking-tight',
-        inverted ? 'text-white' : 'text-slate-900 dark:text-slate-100',
+        'inline-flex items-center whitespace-nowrap font-semibold tracking-tight',
+        inverted ? 'text-white' : 'text-slate-900',
         sizes[size].text,
         className,
       )}
@@ -53,7 +53,7 @@ export function Logo({ className, size = 'md', inverted = false }: BrandProps) {
       <span className="flex flex-col leading-none">
         <BrandName size={size} inverted={inverted} />
         {size === 'lg' ? (
-          <span className={cn('mt-1 text-xs font-medium', inverted ? 'text-white/70' : 'text-slate-500 dark:text-slate-400')}>
+          <span className={cn('mt-1 text-xs font-medium whitespace-nowrap', inverted ? 'text-white/70' : 'text-slate-500')}>
             Smart Queuing. Better Service.
           </span>
         ) : null}
