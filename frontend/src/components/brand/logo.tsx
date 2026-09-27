@@ -54,7 +54,7 @@ export function Logo({ className, size = 'md', inverted = false }: BrandProps) {
         <BrandName size={size} inverted={inverted} />
         {size === 'lg' ? (
           <span className={cn('mt-1 text-xs font-medium whitespace-nowrap', inverted ? 'text-white/70' : 'text-slate-500')}>
-            Smart Queuing. Better Service.
+            Smart Queuing
           </span>
         ) : null}
       </span>
