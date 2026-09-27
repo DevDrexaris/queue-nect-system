@@ -7,15 +7,12 @@ import { useQueueSnapshot } from '../../hooks/use-queue-snapshot'
 import { queueService } from '../../services/api'
 import { cn } from '../../lib/utils'
 
-const VOICE_KEY = 'qn.display.voice'
-
 export function TvDisplayPage() {
   const { clinicId } = useParams()
   const [params] = useSearchParams()
   const identifier = clinicId || params.get('clinic') || ''
   const { data, error, loading } = useQueueSnapshot(identifier || undefined, 3000)
   const [now, setNow] = useState(() => new Date())
-  const [voice, setVoice] = useState(() => localStorage.getItem(VOICE_KEY) === 'on')
   const [qr, setQr] = useState('')
   const [flash, setFlash] = useState(false)
   const lastCalled = useRef<string | null>(null)
@@ -55,18 +52,11 @@ export function TvDisplayPage() {
     if (lastCalled.current && lastCalled.current !== serving.queueNumber) {
       setFlash(true)
       const timeout = window.setTimeout(() => setFlash(false), 1200)
-      if (voice && 'speechSynthesis' in window) {
-        const utterance = new SpeechSynthesisUtterance(
-          `Queue number ${serving.queueNumber.split('').join(' ')}, please proceed to the clinic.`,
-        )
-        window.speechSynthesis.cancel()
-        window.speechSynthesis.speak(utterance)
-      }
       lastCalled.current = serving.queueNumber
       return () => window.clearTimeout(timeout)
     }
     lastCalled.current = serving.queueNumber
-  }, [serving?.queueNumber, voice])
+  }, [serving?.queueNumber])
 
   return (
     <div className="flex min-h-dvh flex-col px-8 py-6 lg:px-14 lg:py-8">
@@ -80,18 +70,6 @@ export function TvDisplayPage() {
             {now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </p>
           <p className="text-sm text-white/60">{now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}</p>
-          <label className="mt-3 inline-flex items-center gap-2 text-sm text-white/70">
-            <input
-              type="checkbox"
-              checked={voice}
-              onChange={(event) => {
-                const nextValue = event.target.checked
-                setVoice(nextValue)
-                localStorage.setItem(VOICE_KEY, nextValue ? 'on' : 'off')
-              }}
-            />
-            Voice announcement
-          </label>
         </div>
       </header>
 

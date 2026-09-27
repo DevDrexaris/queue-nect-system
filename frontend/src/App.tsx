@@ -53,6 +53,10 @@ export default function App() {
             <Route index element={<TvDisplayPage />} />
             <Route path=":clinicId" element={<TvDisplayPage />} />
           </Route>
+          <Route path="/tv" element={<DisplayLayout />}>
+            <Route index element={<TvDisplayPage />} />
+            <Route path=":clinicId" element={<TvDisplayPage />} />
+          </Route>
           <Route path="/clinic/login" element={<AdminLoginPage />} />
           <Route path="/admin/login" element={<Navigate to="/clinic/login" replace />} />
           <Route element={<RequireRole roles={['ADMIN', 'ORG_ADMIN', 'STAFF']} />}>

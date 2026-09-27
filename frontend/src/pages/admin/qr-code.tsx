@@ -34,7 +34,7 @@ export function AdminQrCodePage() {
   }, [identifier])
 
   const preview = useMemo(() => getQueueJoinUrl(identifier, token), [identifier, token])
-  const displayUrl = useMemo(() => `/display/${encodeURIComponent(identifier)}`, [identifier])
+  const displayUrl = useMemo(() => `/tv/${encodeURIComponent(identifier)}`, [identifier])
 
   function openTvDisplay() {
     window.open(displayUrl, '_blank', 'noopener,noreferrer')
