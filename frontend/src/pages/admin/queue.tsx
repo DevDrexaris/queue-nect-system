@@ -26,6 +26,7 @@ export function AdminQueuePage() {
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<string>('all')
   const [pending, setPending] = useState<QueueEntry | null>(null)
+  const [resetting, setResetting] = useState(false)
   const [calling, setCalling] = useState(false)
 
   const entries = (data?.entries ?? []).filter((item) => {
@@ -83,6 +84,20 @@ export function AdminQueuePage() {
     }
   }
 
+  async function resetQueue() {
+    if (!clinicId) return
+    setResetting(true)
+    try {
+      await queueService.resetQueue(clinicId)
+      toast.success('Queue reset to A001')
+      await reload()
+    } catch (caught) {
+      toast.error(userMessage(caught))
+    } finally {
+      setResetting(false)
+    }
+  }
+
   if (!clinicId) return <ErrorState title="No clinic assigned." />
   if (loading) return <LoadingState label="Loading queue..." />
   if (error && !data) return <ErrorState title="Unable to load queue." description={error} onRetry={() => void reload()} />
@@ -101,6 +116,9 @@ export function AdminQueuePage() {
             </Button>
             <Button variant="outline" onClick={() => void serveNext()} loading={calling}>
               Serve next
+            </Button>
+            <Button variant="destructive" onClick={() => void resetQueue()} loading={resetting}>
+              {resetting ? 'Resetting...' : 'Reset queue'}
             </Button>
           </div>
         }

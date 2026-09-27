@@ -651,6 +651,43 @@ export const queueService = {
     return existing
   },
 
+  resetQueue: async (clinicIdentifier: string) => {
+    const { data: org, error: orgError } = await getOrgIdFromClinicIdentifier(clinicIdentifier)
+    if (orgError) throw orgError
+    if (!org) throw new Error('Clinic not found.')
+
+    const today = new Date().toISOString().slice(0, 10)
+    const { data: session, error: sessionError } = await supabase
+      .from('queue_sessions')
+      .select('*')
+      .eq('organization_id', org.id)
+      .eq('session_date', today)
+      .eq('is_active', true)
+      .maybeSingle()
+
+    if (sessionError) throw sessionError
+    if (!session) {
+      throw new Error('There is no active queue session for today to reset.')
+    }
+
+    const { error: deleteError } = await supabase
+      .from('queue_entries')
+      .delete()
+      .eq('organization_id', org.id)
+      .eq('queue_session_id', session.id)
+
+    if (deleteError) throw deleteError
+
+    const { error: resetError } = await supabase
+      .from('queue_sessions')
+      .update({ next_number: 1, updated_at: new Date().toISOString() })
+      .eq('id', session.id)
+
+    if (resetError) throw resetError
+
+    return { queueSessionId: session.id, queuePrefix: org.queue_prefix }
+  },
+
   updateStatus: async (queueId: string, action: 'call' | 'serve' | 'skip' | 'cancel' | 'recall') => {
     const map: Record<string, Partial<any>> = {
       call: { status: 'CALLED', called_at: new Date().toISOString() },
