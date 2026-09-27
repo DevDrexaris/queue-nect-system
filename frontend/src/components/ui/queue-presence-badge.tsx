@@ -4,7 +4,7 @@ export function QueuePresenceBadge({ presence, now }: { presence?: QueuePresence
   if (!presence) return <span className="text-xs text-muted-foreground">Presence pending</span>
 
   const isStale = now - new Date(presence.last_seen_at).getTime() > 90_000
-  const state = isStale ? 'OFFLINE' : presence.presence
+  const state = isStale && presence.presence !== 'BACKGROUND' ? 'OFFLINE' : presence.presence
   const labels: Record<QueuePresence['presence'], string> = {
     ONLINE: 'Online',
     IDLE: 'Inactive',

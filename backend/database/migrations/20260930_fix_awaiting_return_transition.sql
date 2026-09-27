@@ -1,5 +1,61 @@
 -- Restore the complete queue lifecycle after the analytics migration replaced
 -- transition_queue_entry without the awaiting_return/call_again branches.
+create or replace function public.enforce_queue_status_transition()
+returns trigger
+language plpgsql
+set search_path = public
+as $$
+begin
+  if new.queue_number is distinct from old.queue_number
+     or new.queue_session_id is distinct from old.queue_session_id
+     or new.organization_id is distinct from old.organization_id then
+    raise exception 'Queue identity and number are immutable';
+  end if;
+
+  if new.status = old.status then
+    return new;
+  end if;
+
+  if old.status in ('COMPLETED', 'CANCELLED', 'NO_SHOW') then
+    raise exception 'Invalid queue transition: % -> %', old.status, new.status;
+  end if;
+
+  if not (
+    (old.status = 'WAITING' and new.status in ('CALLED', 'AWAITING_RETURN', 'CANCELLED', 'NO_SHOW'))
+    or (old.status = 'CALLED' and new.status in ('SERVING', 'AWAITING_RETURN', 'WAITING', 'CANCELLED', 'NO_SHOW'))
+    or (old.status = 'SERVING' and new.status in ('AWAITING_RETURN', 'COMPLETED', 'CANCELLED'))
+    or (old.status = 'AWAITING_RETURN' and new.status in ('CALLED', 'WAITING', 'CANCELLED', 'NO_SHOW'))
+  ) then
+    raise exception 'Invalid queue transition: % -> %', old.status, new.status;
+  end if;
+
+  if new.status = 'CALLED' then
+    new.called_at := now();
+  elsif new.status = 'WAITING' and old.status = 'CALLED' then
+    new.called_at := null;
+  elsif new.status = 'SERVING' then
+    new.started_at := now();
+  elsif new.status = 'COMPLETED' then
+    new.completed_at := now();
+  elsif new.status = 'NO_SHOW' then
+    new.no_show_at := now();
+  elsif new.status = 'CANCELLED' then
+    if new.cancellation_source is null
+       or new.cancellation_source not in ('STUDENT', 'ADMIN') then
+      raise exception 'Cancellation source is required';
+    end if;
+    new.cancelled_at := now();
+    new.cancelled_by := case
+      when new.cancellation_source = 'ADMIN' then auth.uid()
+      else null
+    end;
+  end if;
+
+  new.updated_at := now();
+  return new;
+end;
+$$;
+
 create or replace function public.transition_queue_entry(
   p_queue_entry_id uuid,
   p_action text

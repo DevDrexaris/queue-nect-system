@@ -134,7 +134,7 @@ export function QueueStatusPage() {
     } finally {
       if (requestId === requestIdRef.current) setLoading(false)
     }
-  }, [ticket])
+  }, [ticket, triggerCallAlert])
 
   useEffect(() => {
     const initialLoad = window.setTimeout(() => void load('initial'), 0)

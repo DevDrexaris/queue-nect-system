@@ -7,7 +7,7 @@ import { useQueueSnapshot } from '../../hooks/use-queue-snapshot'
 import { queueService } from '../../services/api'
 import { cn } from '../../lib/utils'
 import { QueueEventAnimation, type QueueEventKind } from '../../components/ui/queue-event-animation'
-import { buildQueueAnnouncement } from '../../lib/speech'
+import { buildQueueAnnouncement, enqueueSpeechAnnouncement } from '../../lib/speech'
 
 export function TvDisplayPage() {
   const { clinicId } = useParams()
@@ -19,7 +19,8 @@ export function TvDisplayPage() {
   const [queueEvent, setQueueEvent] = useState<{ kind: QueueEventKind; sequence: number } | null>(null)
   const lastActiveKey = useRef<string | null>(null)
   const eventSequence = useRef(0)
-  const announcedEventSequence = useRef<number | null>(null)
+  const announcementInitialized = useRef(false)
+  const lastAnnouncedCallKey = useRef<string | null>(null)
 
   useEffect(() => {
     const media = window.matchMedia('(min-width: 1280px)')
@@ -104,28 +105,35 @@ export function TvDisplayPage() {
 
   useEffect(() => {
     const clinic = data?.clinic
-    if (!clinic || !queueEvent || queueEvent.kind !== 'called' || clinic.announcementsEnabled === false) return
-    if (announcedEventSequence.current === queueEvent.sequence) return
-    if (!('speechSynthesis' in window)) return
+    if (!clinic || !data) return
 
-    const queueNumber = calling?.queueNumber
-    if (!queueNumber) return
-    announcedEventSequence.current = queueEvent.sequence
+    const callKey = calling?.calledAt && calling.id
+      ? `${calling.id}:${calling.calledAt}`
+      : null
 
-    const utterance = new SpeechSynthesisUtterance(buildQueueAnnouncement({
-      queueNumber,
-      organizationName: clinic.name,
-      serviceArea: clinic.announcementServiceArea || 'the service desk',
-      useCustom: clinic.announcementUseCustom ?? false,
-      template: clinic.announcementTemplate || 'Queue {queue_number}, please proceed to {service_area}.',
-      speech: true,
-    }))
-    utterance.rate = clinic.announcementRate ?? 0.95
-    utterance.volume = clinic.announcementVolume ?? 1
-    utterance.voice = window.speechSynthesis.getVoices().find((voice) => voice.name === clinic.announcementVoice) ?? null
-    window.speechSynthesis.cancel()
-    window.speechSynthesis.speak(utterance)
-  }, [queueEvent, calling?.queueNumber, data?.clinic])
+    if (!announcementInitialized.current) {
+      announcementInitialized.current = true
+      lastAnnouncedCallKey.current = callKey
+      return
+    }
+    if (!calling || !callKey || callKey === lastAnnouncedCallKey.current) return
+    lastAnnouncedCallKey.current = callKey
+    if (clinic.announcementsEnabled === false) return
+
+    enqueueSpeechAnnouncement({
+      text: buildQueueAnnouncement({
+        queueNumber: calling.queueNumber,
+        organizationName: clinic.name,
+        serviceArea: clinic.announcementServiceArea || 'the service desk',
+        useCustom: clinic.announcementUseCustom ?? false,
+        template: clinic.announcementTemplate || 'Queue {queue_number}, please proceed to {service_area}.',
+        speech: true,
+      }),
+      rate: clinic.announcementRate ?? 0.95,
+      volume: clinic.announcementVolume ?? 1,
+      voiceName: clinic.announcementVoice,
+    })
+  }, [calling?.calledAt, calling?.id, data, data?.clinic])
 
   return (
     <div className="flex min-h-dvh flex-col px-4 py-5 sm:px-8 sm:py-6 lg:px-14 lg:py-8">

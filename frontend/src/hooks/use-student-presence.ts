@@ -35,6 +35,8 @@ export function useStudentQueueRealtime(onChange: (reason?: QueueRealtimeReason)
     let tokenHash: string | null = null
     let reconnectTimer: number | undefined
     let lastResumeAt = 0
+    let channelStatus = 'CLOSED'
+    let channelConnecting = false
 
     const updatePresence = async (next: Presence, heartbeat = false) => {
       if (disposed || next === presence && !heartbeat) return
@@ -53,6 +55,30 @@ export function useStudentQueueRealtime(onChange: (reason?: QueueRealtimeReason)
       lastActivity = Date.now()
       if (document.visibilityState === 'visible') void updatePresence('ONLINE')
     }
+    const subscribe = () => {
+      if (disposed || !tokenHash || channelConnecting || channelStatus === 'SUBSCRIBED') return
+      channelConnecting = true
+      if (channel) void supabaseAnon.removeChannel(channel)
+      channel = supabaseAnon
+        .channel(`student-queue:${tokenHash}`, { config: { private: true } })
+        .on('broadcast', { event: 'queue_status_changed' }, (message) => {
+          const payload = message?.payload as { status?: string } | undefined
+          if (!payload || !['WAITING', 'CALLED', 'SERVING', 'AWAITING_RETURN', 'COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(payload.status ?? '')) {
+            console.warn('[Queue-Nect] Ignoring malformed student queue realtime event.', message)
+            return
+          }
+          callback.current('realtime')
+        })
+        .subscribe((status) => {
+          channelStatus = status
+          channelConnecting = false
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            channelConnecting = false
+            console.error('[Queue-Nect] Student queue realtime connection failed:', status)
+          }
+        })
+    }
+
     const reconnect = () => {
       if (disposed || document.visibilityState !== 'visible' || !navigator.onLine) return
       const now = Date.now()
@@ -60,27 +86,7 @@ export function useStudentQueueRealtime(onChange: (reason?: QueueRealtimeReason)
       lastResumeAt = now
       void updatePresence('ONLINE', true)
       callback.current('resume')
-      if (!tokenHash) return
-      window.clearTimeout(reconnectTimer)
-      reconnectTimer = window.setTimeout(() => {
-        if (disposed || !tokenHash) return
-        if (channel) void supabaseAnon.removeChannel(channel)
-        channel = supabaseAnon
-          .channel(`student-queue:${tokenHash}`, { config: { private: true } })
-          .on('broadcast', { event: 'queue_status_changed' }, (message) => {
-            const payload = message?.payload as { status?: string } | undefined
-            if (!payload || !['WAITING', 'CALLED', 'SERVING', 'AWAITING_RETURN', 'COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(payload.status ?? '')) {
-              console.warn('[Queue-Nect] Ignoring malformed student queue realtime event.', message)
-              return
-            }
-            callback.current('realtime')
-          })
-          .subscribe((status) => {
-            if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-              console.error('[Queue-Nect] Student queue realtime connection failed:', status)
-            }
-          })
-      }, 0)
+      subscribe()
     }
 
     const onVisibility = () => {
@@ -116,21 +122,7 @@ export function useStudentQueueRealtime(onChange: (reason?: QueueRealtimeReason)
     void hashToken(ticket.statusToken).then((nextTokenHash) => {
       if (disposed) return
       tokenHash = nextTokenHash
-      channel = supabaseAnon
-        .channel(`student-queue:${nextTokenHash}`, { config: { private: true } })
-        .on('broadcast', { event: 'queue_status_changed' }, (message) => {
-          const payload = message?.payload as { status?: string } | undefined
-          if (!payload || !['WAITING', 'CALLED', 'SERVING', 'AWAITING_RETURN', 'COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(payload.status ?? '')) {
-            console.warn('[Queue-Nect] Ignoring malformed student queue realtime event.', message)
-            return
-          }
-          callback.current('realtime')
-        })
-        .subscribe((status) => {
-          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-            console.error('[Queue-Nect] Student queue realtime connection failed:', status)
-          }
-        })
+      subscribe()
     }).catch((caught) => console.error('[Queue-Nect] Student queue realtime setup failed:', caught))
 
     document.addEventListener('visibilitychange', onVisibility)

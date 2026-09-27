@@ -74,7 +74,8 @@ export function AdminLayout() {
   const organizationId = user?.clinic?.id
   const realtime = useAdminRealtime(organizationId)
   const activeCount = realtime.presence.filter((item) =>
-    item.presence !== 'OFFLINE' && realtime.now - new Date(item.last_seen_at).getTime() <= 90_000,
+    item.presence === 'BACKGROUND'
+      || (item.presence !== 'OFFLINE' && realtime.now - new Date(item.last_seen_at).getTime() <= 90_000),
   ).length
   const title = titles[location.pathname] || 'Admin'
 
