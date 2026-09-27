@@ -27,6 +27,8 @@ export function AdminQueuePage() {
   const [status, setStatus] = useState<string>('all')
   const [pending, setPending] = useState<QueueEntry | null>(null)
   const [resetting, setResetting] = useState(false)
+  const [resetPending, setResetPending] = useState(false)
+  const [resetConfirmed, setResetConfirmed] = useState(false)
   const [calling, setCalling] = useState(false)
 
   const entries = (data?.entries ?? []).filter((item) => {
@@ -90,6 +92,8 @@ export function AdminQueuePage() {
     try {
       await queueService.resetQueue(clinicId)
       toast.success('Queue reset to A001')
+      setResetPending(false)
+      setResetConfirmed(false)
       await reload()
     } catch (caught) {
       toast.error(userMessage(caught))
@@ -117,7 +121,7 @@ export function AdminQueuePage() {
             <Button variant="outline" onClick={() => void serveNext()} loading={calling}>
               Serve next
             </Button>
-            <Button variant="destructive" onClick={() => void resetQueue()} loading={resetting}>
+            <Button variant="destructive" onClick={() => setResetPending(true)} loading={resetting}>
               {resetting ? 'Resetting...' : 'Reset queue'}
             </Button>
           </div>
@@ -285,6 +289,42 @@ export function AdminQueuePage() {
           </>
         }
       />
+
+      <Dialog
+        open={resetPending}
+        onClose={() => {
+          setResetPending(false)
+          setResetConfirmed(false)
+        }}
+        title="Reset today’s queue?"
+        description="This permanently clears all current queue entries for today and resets the counter back to A001. This should only be used when you are starting a fresh queue session or have finished the day’s queue and want to restart cleanly."
+        footer={
+          <>
+            <Button variant="outline" onClick={() => { setResetPending(false); setResetConfirmed(false) }}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={!resetConfirmed || resetting}
+              onClick={() => void resetQueue()}
+            >
+              {resetting ? 'Resetting...' : 'I understand, reset queue'}
+            </Button>
+          </>
+        }
+      >
+        <label className="mt-2 flex items-start gap-3 rounded-lg border border-border bg-muted/40 p-3 text-sm text-foreground">
+          <input
+            type="checkbox"
+            checked={resetConfirmed}
+            onChange={(event) => setResetConfirmed(event.target.checked)}
+            className="mt-1 size-4"
+          />
+          <span>
+            I confirm this is a fresh start for the queue and understand that all active queue entries for today will be cleared.
+          </span>
+        </label>
+      </Dialog>
     </div>
   )
 }

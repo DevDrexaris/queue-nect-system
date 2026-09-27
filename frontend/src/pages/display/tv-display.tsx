@@ -43,21 +43,23 @@ export function TvDisplayPage() {
     void generateQr()
   }, [identifier])
 
-  const serving = data?.nowServing
-  const next = data?.upNext ?? []
-  const active = Boolean(serving || next.length)
-  const isCalling = serving?.status === 'CALLED'
+  const serving = data?.entries.find((entry) => entry.status === 'SERVING') ?? null
+  const calling = data?.entries.find((entry) => entry.status === 'CALLED') ?? null
+  const next = [...(calling ? [calling] : []), ...(data?.entries.filter((entry) => entry.status === 'WAITING') ?? [])].slice(0, 4)
+  const active = Boolean(serving || calling || next.length)
+  const isCalling = Boolean(calling)
 
   useEffect(() => {
-    if (!serving?.queueNumber) return
-    if (lastCalled.current && lastCalled.current !== serving.queueNumber) {
+    const currentCallNumber = calling?.queueNumber ?? serving?.queueNumber
+    if (!currentCallNumber) return
+    if (lastCalled.current && lastCalled.current !== currentCallNumber) {
       setFlash(true)
       const timeout = window.setTimeout(() => setFlash(false), 1200)
-      lastCalled.current = serving.queueNumber
+      lastCalled.current = currentCallNumber
       return () => window.clearTimeout(timeout)
     }
-    lastCalled.current = serving.queueNumber
-  }, [serving?.queueNumber])
+    lastCalled.current = currentCallNumber
+  }, [calling?.queueNumber, serving?.queueNumber])
 
   return (
     <div className="flex min-h-dvh flex-col px-8 py-6 lg:px-14 lg:py-8">
@@ -103,15 +105,35 @@ export function TvDisplayPage() {
                 {isCalling ? <span className="h-2.5 w-2.5 rounded-full bg-amber-300 shadow-[0_0_16px_rgba(252,211,77,0.8)]" /> : null}
               </div>
               <div className="mt-4">
-                <QueueNumber value={serving?.queueNumber || '—'} size="display" className={cn('text-white', isCalling && 'text-amber-100')} />
+                <QueueNumber value={calling?.queueNumber ?? serving?.queueNumber ?? '—'} size="display" className={cn('text-white', isCalling && 'text-amber-100')} />
               </div>
+              {serving && calling && serving.id !== calling.id ? (
+                <div className="mt-6 rounded-2xl border border-white/10 bg-slate-950/30 p-4 text-left">
+                  <p className="text-[10px] font-medium tracking-[0.2em] text-white/60 uppercase">Currently serving</p>
+                  <div className="mt-2 flex items-center justify-between gap-3">
+                    <QueueNumber value={serving.queueNumber} size="sm" className="text-white" />
+                    <span className="text-sm text-white/70">{serving.studentName}</span>
+                  </div>
+                </div>
+              ) : null}
             </section>
             <section>
               <p className="text-sm font-medium tracking-[0.25em] text-white/50 uppercase">Next</p>
               <ol className="mt-4 space-y-3">
-                {next.slice(0, 3).map((item) => (
-                  <li key={item.id} className="rounded-2xl bg-white/5 px-5 py-4 font-mono text-3xl font-semibold tabular-nums lg:text-5xl">
-                    {item.queueNumber}
+                {next.slice(0, 4).map((item) => (
+                  <li
+                    key={item.id}
+                    className={cn(
+                      'rounded-2xl px-5 py-4 font-mono text-3xl font-semibold tabular-nums lg:text-5xl transition-all',
+                      item.status === 'CALLED'
+                        ? 'border border-amber-300/70 bg-amber-400/15 text-amber-100 shadow-[0_0_20px_rgba(252,211,77,0.25)]'
+                        : 'bg-white/5 text-white',
+                    )}
+                  >
+                    <span className="flex items-center justify-between gap-2">
+                      <span>{item.queueNumber}</span>
+                      {item.status === 'CALLED' ? <span className="text-xs tracking-[0.2em] uppercase text-amber-200">Calling</span> : null}
+                    </span>
                   </li>
                 ))}
                 {next.length === 0 ? <li className="text-white/50">No one waiting</li> : null}

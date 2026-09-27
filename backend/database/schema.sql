@@ -399,6 +399,23 @@ with check (
   public.is_super_admin() or public.is_org_staff(organization_id)
 );
 
+create policy "Org staff can reset the active queue for their org"
+on public.queue_entries
+for delete
+using (
+  public.is_super_admin() or public.is_org_staff(organization_id)
+);
+
+create policy "Org staff can reset queue sessions for their org"
+on public.queue_sessions
+for update
+using (
+  public.is_super_admin() or public.is_org_staff(organization_id)
+)
+with check (
+  public.is_super_admin() or public.is_org_staff(organization_id)
+);
+
 create policy "Org staff can view history for their org"
 on public.queue_history
 for select

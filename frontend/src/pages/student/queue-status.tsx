@@ -53,6 +53,14 @@ function playQueueCallTone() {
   }
 }
 
+function playQueueCallSequence(times = 5, intervalMs = 220) {
+  for (let index = 0; index < times; index += 1) {
+    window.setTimeout(() => {
+      playQueueCallTone()
+    }, index * intervalMs)
+  }
+}
+
 async function maybeShowQueueNotification(queueNumber: string) {
   if (typeof window === 'undefined' || !('Notification' in window)) return
 
@@ -78,7 +86,7 @@ export function QueueStatusPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(Boolean(ticket))
   const [notificationEnabled, setNotificationEnabled] = useState(false)
-  const lastNotifiedRef = useRef<string | null>(null)
+  const lastCallKeyRef = useRef<string | null>(null)
 
   const load = useCallback(async () => {
     if (!ticket) return
@@ -115,10 +123,12 @@ export function QueueStatusPage() {
 
   useEffect(() => {
     if (!entry || entry.status !== 'CALLED') return
-    if (lastNotifiedRef.current === entry.id) return
 
-    lastNotifiedRef.current = entry.id
-    playQueueCallTone()
+    const callKey = `${entry.id}:${entry.calledAt ?? 'unknown'}`
+    if (lastCallKeyRef.current === callKey) return
+
+    lastCallKeyRef.current = callKey
+    playQueueCallSequence(5, 220)
 
     if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
       void maybeShowQueueNotification(entry.queueNumber)
@@ -150,7 +160,7 @@ export function QueueStatusPage() {
   }
 
   const serving = snapshot?.nowServing?.queueNumber
-  const waiting = snapshot?.entries.filter((item) => item.status === 'WAITING' || item.id === entry.id).slice(0, 8) ?? []
+  const waiting = snapshot?.entries.filter((item) => item.status === 'WAITING' || item.status === 'CALLED' || item.id === entry.id).slice(0, 8) ?? []
   const finalServiceTime = entry.servedAt || entry.joinedAt
 
   return (
