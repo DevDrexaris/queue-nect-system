@@ -104,8 +104,8 @@ export function AdminDashboardPage() {
                 Serve next
               </Button>
               {calledEntry ? (
-                <div className="pointer-events-none absolute -top-9 right-0 z-10 inline-flex items-center gap-2 rounded-full border border-emerald-300/80 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-medium tracking-[0.12em] text-emerald-700 shadow-[0_4px_14px_rgba(16,185,129,0.18)] backdrop-blur-sm animate-[queue-call-toast_220ms_ease-out]">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.9)]" />
+                <div className="pointer-events-none absolute -top-7 right-0 z-10 inline-flex max-w-[11rem] items-center gap-1.5 rounded-full border border-emerald-300/80 bg-emerald-500/10 px-2 py-1 text-[9px] font-medium tracking-[0.12em] text-emerald-700 shadow-[0_4px_14px_rgba(16,185,129,0.18)] backdrop-blur-sm animate-[queue-call-toast_220ms_ease-out]">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.9)]" />
                   SERVE NOW
                 </div>
               ) : null}
