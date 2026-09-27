@@ -629,6 +629,28 @@ export const queueService = {
     }
   },
 
+  deleteEntry: async (queueId: string) => {
+    const { data: existing, error: fetchError } = await supabase
+      .from('queue_entries')
+      .select('*')
+      .eq('id', queueId)
+      .single()
+
+    if (fetchError) throw fetchError
+    if (['WAITING', 'CALLED', 'SERVING'].includes(existing.status)) {
+      throw new Error('Active queue numbers cannot be deleted. Finish, skip, or cancel them first.')
+    }
+
+    const { error } = await supabase
+      .from('queue_entries')
+      .delete()
+      .eq('id', queueId)
+
+    if (error) throw error
+
+    return existing
+  },
+
   updateStatus: async (queueId: string, action: 'call' | 'serve' | 'skip' | 'cancel' | 'recall') => {
     const map: Record<string, Partial<any>> = {
       call: { status: 'CALLED', called_at: new Date().toISOString() },

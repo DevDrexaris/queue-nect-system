@@ -73,6 +73,16 @@ export function AdminQueuePage() {
     }
   }
 
+  async function removeQueueEntry(entry: QueueEntry) {
+    try {
+      await queueService.deleteEntry(entry.id)
+      toast.success(`Deleted ${entry.queueNumber}`)
+      await reload()
+    } catch (caught) {
+      toast.error(userMessage(caught))
+    }
+  }
+
   if (!clinicId) return <ErrorState title="No clinic assigned." />
   if (loading) return <LoadingState label="Loading queue..." />
   if (error && !data) return <ErrorState title="Unable to load queue." description={error} onRetry={() => void reload()} />
@@ -189,6 +199,13 @@ export function AdminQueuePage() {
                         <ActionItem destructive onClick={() => setPending(item)}>
                           Cancel
                         </ActionItem>
+                        <ActionItem
+                          destructive
+                          disabled={['WAITING', 'CALLED', 'SERVING'].includes(item.status)}
+                          onClick={() => void removeQueueEntry(item)}
+                        >
+                          Delete
+                        </ActionItem>
                       </ActionMenu>
                     </TD>
                   </TR>
@@ -208,6 +225,13 @@ export function AdminQueuePage() {
                     <ActionItem onClick={() => void run('skip', item)}>Skip</ActionItem>
                     <ActionItem destructive onClick={() => setPending(item)}>
                       Cancel
+                    </ActionItem>
+                    <ActionItem
+                      destructive
+                      disabled={['WAITING', 'CALLED', 'SERVING'].includes(item.status)}
+                      onClick={() => void removeQueueEntry(item)}
+                    >
+                      Delete
                     </ActionItem>
                   </ActionMenu>
                 </div>
