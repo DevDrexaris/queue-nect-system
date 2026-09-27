@@ -105,7 +105,7 @@ export function AdminAnalyticsPage() {
                 <CardTitle>Hourly traffic</CardTitle>
               </CardHeader>
               <CardContent>
-                <SimpleBarChart data={data.hourly} />
+                <SimpleBarChart data={data.hourly} hourly emptyLabel="No queue activity yet today." />
               </CardContent>
             </Card>
             <Card>
@@ -113,7 +113,7 @@ export function AdminAnalyticsPage() {
                 <CardTitle>Daily traffic</CardTitle>
               </CardHeader>
               <CardContent>
-                <SimpleBarChart data={data.daily} />
+                <SimpleBarChart data={data.daily} emptyLabel="No queue activity in this date range." />
               </CardContent>
             </Card>
             <Card className="xl:col-span-2">
