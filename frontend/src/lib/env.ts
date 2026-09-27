@@ -5,15 +5,18 @@ function stripSlash(value: string) {
 }
 
 export function getPublicUrl() {
-  const configured = stripSlash(
-    import.meta.env.VITE_PUBLIC_URL || PLACEHOLDER_PUBLIC_URL
-  )
+  const configured = (import.meta.env.VITE_PUBLIC_URL ?? '').trim()
+  const candidate = configured ? stripSlash(configured) : ''
 
-  if (!configured.startsWith('http://') && !configured.startsWith('https://')) {
-    return PLACEHOLDER_PUBLIC_URL
+  if (candidate && (candidate.startsWith('http://') || candidate.startsWith('https://'))) {
+    return candidate
   }
 
-  return configured
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return stripSlash(window.location.origin)
+  }
+
+  return PLACEHOLDER_PUBLIC_URL
 }
 
 export function isPlaceholderPublicUrl() {

@@ -72,9 +72,36 @@ async function getQueueClient() {
   return session ? supabase : supabaseAnon
 }
 
+async function withPublicFallback<T>(
+  publicCall: () => Promise<{ data: T | null; error: any }>,
+  staffCall?: () => Promise<{ data: T | null; error: any }>
+): Promise<{ data: T | null; error: any }> {
+  try {
+    return await publicCall()
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error ?? '')
+    const shouldFallback = /permission denied|row level security|policy|42501/i.test(message)
+
+    if (!shouldFallback) throw error
+
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session || !staffCall) throw error
+
+    return await staffCall()
+  }
+}
+
 async function getOrgIdFromClinicIdentifier(clinicIdentifier: string) {
-  const client = await getQueueClient()
-  return client.from('organizations').select('*').eq('public_identifier', clinicIdentifier).maybeSingle()
+  const publicQuery = async () => {
+    const result = await supabaseAnon.from('organizations').select('*').eq('public_identifier', clinicIdentifier).maybeSingle()
+    return result
+  }
+  const staffQuery = async () => {
+    const result = await supabase.from('organizations').select('*').eq('public_identifier', clinicIdentifier).maybeSingle()
+    return result
+  }
+
+  return withPublicFallback(publicQuery, staffQuery)
 }
 
 async function createOrganizationQrToken(organizationId: string) {
@@ -112,15 +139,35 @@ export const queueService = {
     if (orgError) throw orgError
     if (!org) throw new Error('Clinic not found.')
 
-    const { data: existing, error: existingError } = await supabaseAnon
-      .from('organization_qr_tokens')
-      .select('*')
-      .eq('organization_id', org.id)
-      .eq('is_active', true)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
+    const fetchActiveToken = async () => {
+      const response = await withPublicFallback(
+        async () => {
+          const result = await supabaseAnon
+            .from('organization_qr_tokens')
+            .select('*')
+            .eq('organization_id', org.id)
+            .eq('is_active', true)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+          return result
+        },
+        async () => {
+          const result = await supabase
+            .from('organization_qr_tokens')
+            .select('*')
+            .eq('organization_id', org.id)
+            .eq('is_active', true)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+          return result
+        },
+      )
+      return response
+    }
 
+    const { data: existing, error: existingError } = await fetchActiveToken()
     if (existingError && existingError.code !== 'PGRST116') throw existingError
     if (existing) return existing.token
 
@@ -132,21 +179,47 @@ export const queueService = {
     if (orgError) throw orgError
     if (!org) throw new Error('Clinic not found.')
 
-    const { data: activeTokens, error: listError } = await supabaseAnon
-      .from('organization_qr_tokens')
-      .select('*')
-      .eq('organization_id', org.id)
-      .eq('is_active', true)
+    const fetchActiveTokens = async () => await withPublicFallback(
+      async () => {
+        const result = await supabaseAnon
+          .from('organization_qr_tokens')
+          .select('*')
+          .eq('organization_id', org.id)
+          .eq('is_active', true)
+        return result
+      },
+      async () => {
+        const result = await supabase
+          .from('organization_qr_tokens')
+          .select('*')
+          .eq('organization_id', org.id)
+          .eq('is_active', true)
+        return result
+      },
+    )
 
+    const { data: activeTokens, error: listError } = await fetchActiveTokens()
     if (listError) throw listError
 
     if (activeTokens && activeTokens.length > 0) {
-      const { error: deactivateError } = await supabaseAnon
-        .from('organization_qr_tokens')
-        .update({ is_active: false, updated_at: new Date().toISOString() })
-        .in('id', activeTokens.map((item) => item.id))
+      const deactivate = await withPublicFallback(
+        async () => {
+          const result = await supabaseAnon
+            .from('organization_qr_tokens')
+            .update({ is_active: false, updated_at: new Date().toISOString() })
+            .in('id', activeTokens.map((item) => item.id))
+          return result
+        },
+        async () => {
+          const result = await supabase
+            .from('organization_qr_tokens')
+            .update({ is_active: false, updated_at: new Date().toISOString() })
+            .in('id', activeTokens.map((item) => item.id))
+          return result
+        },
+      )
 
-      if (deactivateError) throw deactivateError
+      if (deactivate.error) throw deactivate.error
     }
 
     const tokenRow = await createOrganizationQrToken(org.id)
@@ -167,17 +240,40 @@ export const queueService = {
     const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString()
     const token = generateSecureQrToken(32)
 
-    const { data, error } = await supabaseAnon
-      .from('organization_qr_tokens')
-      .insert({
-        organization_id: org.id,
-        token,
-        is_active: true,
-        expires_at: expiresAt,
-      })
-      .select('*')
-      .single()
+    const insertToken = async () => {
+      const response = await withPublicFallback(
+        async () => {
+          const result = await supabaseAnon
+            .from('organization_qr_tokens')
+            .insert({
+              organization_id: org.id,
+              token,
+              is_active: true,
+              expires_at: expiresAt,
+            })
+            .select('*')
+            .single()
+          return result
+        },
+        async () => {
+          const result = await supabase
+            .from('organization_qr_tokens')
+            .insert({
+              organization_id: org.id,
+              token,
+              is_active: true,
+              expires_at: expiresAt,
+            })
+            .select('*')
+            .single()
+          return result
+        },
+      )
 
+      return response
+    }
+
+    const { data, error } = await insertToken()
     if (error) throw error
     if (!data) {
       throw new Error('Queue access is invalid or expired.')
