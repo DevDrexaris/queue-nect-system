@@ -117,6 +117,11 @@ export function AdminDashboardPage() {
                 <p className="mt-2 text-sm font-medium">{serving.studentName}</p>
                 <p className="text-sm text-muted-foreground">{serving.purpose}</p>
                 <div className="mt-4 flex flex-wrap gap-2">
+                  {serving.status === 'CALLED' ? (
+                    <Button variant="outline" onClick={() => void act(serving, 'recall')}>
+                      Stop calling
+                    </Button>
+                  ) : null}
                   <Button onClick={() => void act(serving, 'serve')}>Finish service</Button>
                   <Button variant="outline" onClick={() => void act(serving, 'skip')}>
                     Skip

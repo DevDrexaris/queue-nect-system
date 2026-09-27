@@ -178,6 +178,24 @@ export function QueueStatusPage() {
     return <ErrorState title="Unable to load queue." description={error || undefined} onRetry={() => void load()} />
   }
 
+  if (entry.status === 'CANCELLED') {
+    return (
+      <div className="space-y-5 text-center">
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-6 text-emerald-900">
+          <p className="text-xs font-medium tracking-[0.2em] uppercase text-emerald-700">Queue cancelled</p>
+          <h1 className="mt-3 text-2xl font-semibold">Thank you for visiting.</h1>
+          <p className="mt-3 text-sm leading-6 text-emerald-800">
+            Your queue number has been cancelled successfully. Please scan the QR code again when you are ready to get a new queue number.
+          </p>
+        </div>
+
+        <Link to="/" className={cn(buttonVariants({ size: 'lg' }), 'h-12 w-full')}>
+          Scan QR code again
+        </Link>
+      </div>
+    )
+  }
+
   const serving = snapshot?.nowServing?.queueNumber
   const waiting = snapshot?.entries.filter((item) => item.status === 'WAITING' || item.status === 'CALLED' || item.id === entry.id).slice(0, 8) ?? []
   const finalServiceTime = entry.servedAt || entry.joinedAt

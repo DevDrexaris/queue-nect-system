@@ -32,6 +32,7 @@ export function AdminQueuePage() {
   const [resetPending, setResetPending] = useState(false)
   const [resetConfirmed, setResetConfirmed] = useState(false)
   const [calling, setCalling] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
 
   const entries = (data?.entries ?? []).filter((item) => {
     const matchesQuery = `${item.queueNumber} ${item.studentName} ${item.studentId}`.toLowerCase().includes(query.toLowerCase())
@@ -106,6 +107,15 @@ export function AdminQueuePage() {
     }
   }
 
+  async function refreshQueue() {
+    setRefreshing(true)
+    try {
+      await reload()
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
   if (!clinicId) return <ErrorState title="No clinic assigned." />
   if (loading) return <LoadingState label="Loading queue..." />
   if (error && !data) return <ErrorState title="Unable to load queue." description={error} onRetry={() => void reload()} />
@@ -146,6 +156,11 @@ export function AdminQueuePage() {
                 <p className="mt-1 text-xs text-muted-foreground">Started: {formatTime(serving.calledAt)}</p>
               </div>
               <div className="flex flex-wrap gap-2">
+                {serving.status === 'CALLED' ? (
+                  <Button variant="outline" onClick={() => void run('recall', serving)}>
+                    Stop calling
+                  </Button>
+                ) : null}
                 <Button onClick={() => void run('serve', serving)}>Finish service</Button>
                 <Button variant="outline" onClick={() => void run('skip', serving)}>
                   Skip
@@ -177,9 +192,9 @@ export function AdminQueuePage() {
             </option>
           ))}
         </Select>
-        <Button variant="outline" onClick={() => void reload()}>
-          <RefreshCw className="size-4" />
-          Refresh
+        <Button variant="outline" onClick={() => void refreshQueue()} loading={refreshing}>
+          <RefreshCw className={refreshing ? 'size-4 animate-spin' : 'size-4'} />
+          {refreshing ? 'Refreshing...' : 'Refresh'}
         </Button>
       </div>
 
@@ -218,6 +233,9 @@ export function AdminQueuePage() {
                     </TD>
                     <TD>
                       <ActionMenu label="Manage">
+                        {item.status === 'CALLED' ? (
+                          <ActionItem onClick={() => void run('recall', item)}>Stop calling</ActionItem>
+                        ) : null}
                         <ActionItem destructive onClick={() => setPending(item)}>
                           Cancel
                         </ActionItem>
@@ -242,6 +260,9 @@ export function AdminQueuePage() {
                 <div className="flex items-start justify-between gap-3">
                   <QueueNumber value={item.queueNumber} size="sm" />
                   <ActionMenu label="Manage">
+                    {item.status === 'CALLED' ? (
+                      <ActionItem onClick={() => void run('recall', item)}>Stop calling</ActionItem>
+                    ) : null}
                     <ActionItem destructive onClick={() => setPending(item)}>
                       Cancel
                     </ActionItem>
