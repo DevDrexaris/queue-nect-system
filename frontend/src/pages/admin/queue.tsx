@@ -267,6 +267,9 @@ export function AdminQueuePage() {
                         {item.status === 'CALLED' ? (
                           <ActionItem onClick={() => void run('recall', item)}>Stop calling</ActionItem>
                         ) : null}
+                        {(item.status === 'COMPLETED' || item.status === 'SERVED') ? (
+                          <ActionItem onClick={() => void run('recall', item)}>Restore to waiting</ActionItem>
+                        ) : null}
                         <ActionItem destructive onClick={() => setPending(item)}>
                           Cancel
                         </ActionItem>
@@ -293,6 +296,9 @@ export function AdminQueuePage() {
                   <ActionMenu label="Manage">
                     {item.status === 'CALLED' ? (
                       <ActionItem onClick={() => void run('recall', item)}>Stop calling</ActionItem>
+                    ) : null}
+                    {(item.status === 'COMPLETED' || item.status === 'SERVED') ? (
+                      <ActionItem onClick={() => void run('recall', item)}>Restore to waiting</ActionItem>
                     ) : null}
                     <ActionItem destructive onClick={() => setPending(item)}>
                       Cancel
