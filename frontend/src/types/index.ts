@@ -12,6 +12,7 @@ export type QueueStatus = (typeof QUEUE_STATUSES)[number]
 export const VISIT_PURPOSES = [
   'Consultation',
   'Check-up',
+  'Dental Check Up',
   'First Aid',
   'Medicine',
   'Medical Certificate',
