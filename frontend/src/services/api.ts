@@ -414,7 +414,9 @@ export const queueService = {
       }
     })
 
-    const nowServing = mapped.find((entry) => entry.status === 'SERVING') ?? mapped.find((entry) => entry.status === 'CALLED') ?? null
+    const activeServing = mapped.find((entry) => entry.status === 'SERVING') ?? null
+    const activeCalled = activeServing ? null : mapped.find((entry) => entry.status === 'CALLED') ?? null
+    const nowServing = activeServing ?? activeCalled ?? null
     const upNext = mapped.filter((entry) => entry.status === 'WAITING').slice(0, 5)
     const waitingCount = mapped.filter((entry) => entry.status === 'WAITING').length
     const servingCount = mapped.filter((entry) => entry.status === 'SERVING').length
@@ -543,6 +545,18 @@ export const queueService = {
     const { data: org } = await getOrgIdFromClinicIdentifier(clinicIdentifier)
     if (!org) throw new Error('Clinic not found.')
 
+    const { data: active } = await supabase
+      .from('queue_entries')
+      .select('id, status')
+      .eq('organization_id', org.id)
+      .in('status', ['CALLED', 'SERVING'])
+      .limit(1)
+      .maybeSingle()
+
+    if (active) {
+      throw new Error('A queue number is already active. Finish or stop the current call before calling the next one.')
+    }
+
     const { data: waiting } = await supabase
       .from('queue_entries')
       .select('*')
@@ -585,17 +599,29 @@ export const queueService = {
     const { data: org } = await getOrgIdFromClinicIdentifier(clinicIdentifier)
     if (!org) throw new Error('Clinic not found.')
 
+    const { data: activeServing } = await supabase
+      .from('queue_entries')
+      .select('id, status')
+      .eq('organization_id', org.id)
+      .eq('status', 'SERVING')
+      .limit(1)
+      .maybeSingle()
+
+    if (activeServing) {
+      throw new Error('A student is already being served. Finish the current service before serving another number.')
+    }
+
     const { data: target } = await supabase
       .from('queue_entries')
       .select('*')
       .eq('organization_id', org.id)
-      .in('status', ['CALLED', 'WAITING'])
-      .order('called_at', { ascending: false, nullsFirst: true })
+      .eq('status', 'CALLED')
+      .order('called_at', { ascending: false })
       .order('joined_at', { ascending: true })
       .limit(1)
       .maybeSingle()
 
-    if (!target) throw new Error('No one is ready to serve.')
+    if (!target) throw new Error('No called number is ready to serve.')
 
     const { data, error } = await supabase
       .from('queue_entries')
