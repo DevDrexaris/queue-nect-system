@@ -11,7 +11,6 @@ export function QueueAccessRequiredPage() {
   const [link, setLink] = useState('')
   const [loading, setLoading] = useState(Boolean(clinicId))
   const [errorMessage, setErrorMessage] = useState('')
-  const [fallbackLink, setFallbackLink] = useState('')
 
   useEffect(() => {
     if (!clinicId) {
@@ -24,11 +23,8 @@ export function QueueAccessRequiredPage() {
         setErrorMessage('')
         const details = await queueService.issueAccessToken(clinicId)
         setLink(details.link)
-        setFallbackLink('')
       } catch (error) {
         setLink('')
-        const fallback = `/queue/${encodeURIComponent(clinicId)}/join`
-        setFallbackLink(fallback)
         setErrorMessage(
           error instanceof Error && error.message
             ? error.message
@@ -76,15 +72,9 @@ export function QueueAccessRequiredPage() {
           )}
         </div>
 
-        {fallbackLink ? (
-          <Link to={fallbackLink} className={cn(buttonVariants({ size: 'lg' }), 'mt-6 w-full')}>
-            Continue to queue form
-          </Link>
-        ) : (
-          <Link to="/" className={cn(buttonVariants({ size: 'lg' }), 'mt-6 w-full')}>
-            {link ? 'Scan QR Code' : 'Back to home'}
-          </Link>
-        )}
+        <Link to="/" className={cn(buttonVariants({ size: 'lg' }), 'mt-6 w-full')}>
+          {link ? 'Scan QR Code' : 'Back to home'}
+        </Link>
       </div>
     </div>
   )

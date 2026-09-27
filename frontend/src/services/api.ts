@@ -1,5 +1,5 @@
 import { getQueueJoinUrl } from '../lib/env'
-import { supabase } from '../lib/supabase'
+import { supabase, supabaseAnon } from '../lib/supabase'
 import type {
   AdminAccount,
   Clinic,
@@ -68,11 +68,11 @@ function generateSecureQrToken(length = 32) {
 }
 
 function getOrgIdFromClinicIdentifier(clinicIdentifier: string) {
-  return supabase.from('organizations').select('*').eq('public_identifier', clinicIdentifier).maybeSingle()
+  return supabaseAnon.from('organizations').select('*').eq('public_identifier', clinicIdentifier).maybeSingle()
 }
 
 async function createOrganizationQrToken(organizationId: string) {
-  const { data: existing, error: existingError } = await supabase
+  const { data: existing, error: existingError } = await supabaseAnon
     .from('organization_qr_tokens')
     .select('*')
     .eq('organization_id', organizationId)
@@ -85,7 +85,7 @@ async function createOrganizationQrToken(organizationId: string) {
   if (existing) return existing
 
   const token = generateSecureQrToken(32)
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAnon
     .from('organization_qr_tokens')
     .insert({
       organization_id: organizationId,
@@ -106,7 +106,7 @@ export const queueService = {
     if (orgError) throw orgError
     if (!org) throw new Error('Clinic not found.')
 
-    const { data: existing, error: existingError } = await supabase
+    const { data: existing, error: existingError } = await supabaseAnon
       .from('organization_qr_tokens')
       .select('*')
       .eq('organization_id', org.id)
@@ -126,7 +126,7 @@ export const queueService = {
     if (orgError) throw orgError
     if (!org) throw new Error('Clinic not found.')
 
-    const { data: activeTokens, error: listError } = await supabase
+    const { data: activeTokens, error: listError } = await supabaseAnon
       .from('organization_qr_tokens')
       .select('*')
       .eq('organization_id', org.id)
@@ -135,7 +135,7 @@ export const queueService = {
     if (listError) throw listError
 
     if (activeTokens && activeTokens.length > 0) {
-      const { error: deactivateError } = await supabase
+      const { error: deactivateError } = await supabaseAnon
         .from('organization_qr_tokens')
         .update({ is_active: false, updated_at: new Date().toISOString() })
         .in('id', activeTokens.map((item) => item.id))
@@ -161,7 +161,7 @@ export const queueService = {
     const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString()
     const token = generateSecureQrToken(32)
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAnon
       .from('organization_qr_tokens')
       .insert({
         organization_id: org.id,
@@ -183,7 +183,7 @@ export const queueService = {
     }
   },
   validateAccessToken: async (token: string): Promise<{ clinicIdentifier: string; clinicName: string }> => {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAnon
       .from('organization_qr_tokens')
       .select('token, organization_id, is_active, expires_at, organizations!inner(public_identifier, name)')
       .eq('token', token)
@@ -225,7 +225,7 @@ export const queueService = {
       }
     }
 
-    const { data: entries, error } = await supabase
+    const { data: entries, error } = await supabaseAnon
       .from('queue_entries')
       .select('*')
       .eq('organization_id', org.id)
@@ -280,7 +280,7 @@ export const queueService = {
     const { data: org } = await getOrgIdFromClinicIdentifier(clinicIdentifier)
     if (!org) throw new Error('Clinic not found.')
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAnon
       .from('queue_entries')
       .select('*')
       .eq('organization_id', org.id)
@@ -313,7 +313,7 @@ export const queueService = {
     if (!org) throw new Error('Clinic not found.')
 
     const today = new Date().toISOString().slice(0, 10)
-    let { data: session, error: sessionError } = await supabase
+    let { data: session, error: sessionError } = await supabaseAnon
       .from('queue_sessions')
       .select('*')
       .eq('organization_id', org.id)
@@ -323,7 +323,7 @@ export const queueService = {
     if (sessionError) throw sessionError
 
     if (!session) {
-      const insert = await supabase
+      const insert = await supabaseAnon
         .from('queue_sessions')
         .insert({ organization_id: org.id, session_date: today, queue_prefix: org.queue_prefix, next_number: 1, is_active: true })
         .select('*')
@@ -335,7 +335,7 @@ export const queueService = {
     const nextNumber = (session.next_number ?? 1).toString().padStart(3, '0')
     const queueNumber = `${org.queue_prefix}${nextNumber}`
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAnon
       .from('queue_entries')
       .insert({
         organization_id: org.id,
@@ -353,7 +353,7 @@ export const queueService = {
 
     if (error) throw error
 
-    await supabase
+    await supabaseAnon
       .from('queue_sessions')
       .update({ next_number: (session.next_number ?? 1) + 1, updated_at: new Date().toISOString() })
       .eq('id', session.id)

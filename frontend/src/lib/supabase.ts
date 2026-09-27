@@ -19,6 +19,14 @@ export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
   },
 })
 
+export const supabaseAnon = createClient(supabaseUrl, supabasePublishableKey, {
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false,
+    detectSessionInUrl: false,
+  },
+})
+
 export async function getProfileRole(profileId: string) {
   const { data, error } = await supabase
     .from('profiles')

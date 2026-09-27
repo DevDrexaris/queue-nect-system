@@ -320,6 +320,30 @@ using (
   )
 );
 
+create policy "Public can join an active queue with valid clinic access"
+on public.queue_entries
+for insert
+with check (
+  exists (
+    select 1
+    from public.organizations o
+    where o.id = organization_id
+      and o.is_active = true
+  )
+);
+
+create policy "Public can create active queue sessions for clinics"
+on public.queue_sessions
+for insert
+with check (
+  exists (
+    select 1
+    from public.organizations o
+    where o.id = organization_id
+      and o.is_active = true
+  )
+);
+
 create policy "Org staff can manage org queue entries"
 on public.queue_entries
 for all
