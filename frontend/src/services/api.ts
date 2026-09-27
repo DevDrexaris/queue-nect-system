@@ -469,15 +469,11 @@ export const queueService = {
       throw new Error('This clinic queue is not open yet. Please ask staff to start the queue session.')
     }
 
-    const nextNumber = (session.next_number ?? 1).toString().padStart(3, '0')
-    const queueNumber = `${org.queue_prefix}${nextNumber}`
-
     const { data, error } = await supabaseAnon
       .from('queue_entries')
       .insert({
         organization_id: org.id,
         queue_session_id: session.id,
-        queue_number: queueNumber,
         student_id: payload.studentId,
         full_name: payload.fullName,
         course: payload.course,
