@@ -43,6 +43,14 @@ function storedPreference(key: string, fallback: boolean) {
   }
 }
 
+function storedCallKey() {
+  try {
+    return localStorage.getItem(LAST_CALL_KEY)
+  } catch {
+    return null
+  }
+}
+
 function playQueueCallSequence(context: AudioContext, volume: number) {
   const start = context.currentTime + 0.03
   for (let index = 0; index < 5; index += 1) {
@@ -71,42 +79,68 @@ export function QueueStatusPage() {
   const [notificationEnabled, setNotificationEnabled] = useState(() => storedPreference(NOTIFICATION_PREF, false) && 'Notification' in window && Notification.permission === 'granted')
   const [soundEnabled, setSoundEnabled] = useState(() => storedPreference(SOUND_PREF, true))
   const [callAlertOpen, setCallAlertOpen] = useState(false)
+  const [callEventId, setCallEventId] = useState(0)
   const [canceling, setCanceling] = useState(false)
   const [showCancelPrompt, setShowCancelPrompt] = useState(false)
   const [cancelConfirmed, setCancelConfirmed] = useState(false)
   const audioContextRef = useRef<AudioContext | null>(null)
-  const [lastCallKey, setLastCallKey] = useState(() => {
-    try {
-      return sessionStorage.getItem(LAST_CALL_KEY)
-    } catch {
-      return null
-    }
-  })
+  const hasLoadedRef = useRef(false)
+  const requestIdRef = useRef(0)
+  const lastCallKeyRef = useRef<string | null>(storedCallKey())
 
-  const load = useCallback(async () => {
+  const triggerCallAlert = useCallback((nextEntry: QueueEntry, callKey: string) => {
+    lastCallKeyRef.current = callKey
+    try { localStorage.setItem(LAST_CALL_KEY, callKey) } catch { /* Storage may be blocked. */ }
+    setCallEventId((value) => value + 1)
+    setCallAlertOpen(true)
+
+    if (soundEnabled && audioContextRef.current?.state === 'running') {
+      playQueueCallSequence(audioContextRef.current, 1)
+    }
+    if (notificationEnabled && 'Notification' in window && Notification.permission === 'granted') {
+      const notification = new Notification("Queue-Nect — You're being called", {
+        body: `Queue ${nextEntry.queueNumber} is now being called. Please proceed to the service area.`,
+        icon: '/favicon.svg',
+        tag: `queue-call-${callKey}`,
+      })
+      notification.onclick = () => { window.focus(); window.location.assign('/queue/status') }
+    }
+  }, [notificationEnabled, soundEnabled])
+
+  const load = useCallback(async (source: 'initial' | 'realtime' | 'resume' | 'manual' = 'manual') => {
     if (!ticket) return
+    const requestId = ++requestIdRef.current
     try {
       const [nextEntry, nextSnapshot] = await Promise.all([
         queueService.getEntry(ticket.clinicIdentifier, ticket.queueId),
         queueService.getSnapshot(ticket.clinicIdentifier),
       ])
+      if (requestId !== requestIdRef.current) return
+
+      const isInitialLoad = !hasLoadedRef.current || source === 'initial'
+      if (!isInitialLoad && source === 'realtime' && nextEntry.status === 'CALLED') {
+        const callKey = nextEntry.calledAt ? `${nextEntry.id}:${nextEntry.calledAt}` : null
+        if (callKey && callKey !== lastCallKeyRef.current) triggerCallAlert(nextEntry, callKey)
+        if (!callKey) console.warn('[Queue-Nect] CALLED queue entry has no called_at timestamp; preserving state without a duplicate alert.', nextEntry)
+      }
+
       setEntry(nextEntry)
       setSnapshot(nextSnapshot)
       setError(null)
+      hasLoadedRef.current = true
     } catch (caught) {
-      setEntry(null)
-      setSnapshot(null)
+      console.error('[Queue-Nect] Student queue load failed:', caught)
       setError(userMessage(caught, 'student'))
     } finally {
-      setLoading(false)
+      if (requestId === requestIdRef.current) setLoading(false)
     }
   }, [ticket])
 
   useEffect(() => {
-    const initialLoad = window.setTimeout(() => void load(), 0)
+    const initialLoad = window.setTimeout(() => void load('initial'), 0)
     return () => window.clearTimeout(initialLoad)
   }, [load])
-  useStudentQueueRealtime(load, Boolean(entry && ['WAITING', 'CALLED', 'SERVING', 'AWAITING_RETURN'].includes(entry.status)))
+  useStudentQueueRealtime((reason) => void load(reason ?? 'realtime'), Boolean(entry && ['WAITING', 'CALLED', 'SERVING', 'AWAITING_RETURN'].includes(entry.status)))
 
   async function enableNotifications() {
     if (!('Notification' in window)) {
@@ -186,28 +220,6 @@ export function QueueStatusPage() {
     }
   }
 
-  useEffect(() => {
-    if (entry && entry.status !== 'CALLED') setCallAlertOpen(false)
-    if (!entry || entry.status !== 'CALLED') return
-
-    const callKey = `${entry.id}:${entry.calledAt ?? 'unknown'}`
-    if (lastCallKey === callKey) return
-
-    setLastCallKey(callKey)
-    try { sessionStorage.setItem(LAST_CALL_KEY, callKey) } catch { /* Session storage may be blocked. */ }
-    setCallAlertOpen(true)
-
-    if (soundEnabled && audioContextRef.current?.state === 'running') playQueueCallSequence(audioContextRef.current, 1)
-    if (notificationEnabled && 'Notification' in window && Notification.permission === 'granted') {
-      const notification = new Notification("Queue-Nect — You're being called", {
-        body: `Queue ${entry.queueNumber} is now being called. Please proceed to the service area.`,
-        icon: '/favicon.svg',
-        tag: `queue-call-${entry.id}`,
-      })
-      notification.onclick = () => { window.focus(); window.location.assign('/queue/status') }
-    }
-  }, [entry, lastCallKey, notificationEnabled, soundEnabled])
-
   async function cancelQueue() {
     if (!ticket || !entry) return
     setCanceling(true)
@@ -238,7 +250,7 @@ export function QueueStatusPage() {
   }
 
   if (loading) return <LoadingState label="Loading your queue status..." />
-  if (error || !entry) {
+  if (!entry) {
     return <ErrorState title="Unable to load queue." description={error || undefined} onRetry={() => void load()} />
   }
 
@@ -268,15 +280,22 @@ export function QueueStatusPage() {
     <div className="space-y-5">
       {!online ? <ConnectionBanner /> : null}
       {callAlertOpen && entry.status === 'CALLED' ? (
-        <section role="alertdialog" aria-label="Your turn" className="relative isolate overflow-hidden rounded-xl border border-status-calling/35 bg-status-calling/10 p-5 text-center">
-          <QueueEventAnimation kind="called" />
-          <div className="relative z-10">
-            <p className="text-xs font-semibold tracking-[0.2em] text-status-calling uppercase">Your turn</p>
-            <QueueNumber value={entry.queueNumber} size="lg" className="queue-number-calling mt-2" />
-            <p className="mt-2 text-sm text-foreground">Please proceed to the service area.</p>
-            <Button className="mt-4" variant="outline" onClick={() => setCallAlertOpen(false)}>Got it</Button>
-          </div>
-        </section>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/80 p-4 sm:p-6"
+          role="presentation"
+          style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))', paddingRight: 'max(1rem, env(safe-area-inset-right))', paddingBottom: 'max(1rem, env(safe-area-inset-bottom))', paddingLeft: 'max(1rem, env(safe-area-inset-left))' }}
+        >
+          <button type="button" className="absolute inset-0" aria-label="Close call alert" onClick={() => setCallAlertOpen(false)} />
+          <section key={callEventId} role="alertdialog" aria-modal="true" aria-label="Your turn" className="relative isolate w-full max-w-sm overflow-hidden rounded-2xl border border-status-calling/35 bg-card p-6 text-center shadow-xl">
+            <QueueEventAnimation kind="called" />
+            <div className="relative z-10">
+              <p className="text-xs font-semibold tracking-[0.2em] text-status-calling uppercase">Your turn</p>
+              <QueueNumber value={entry.queueNumber} size="lg" className="queue-number-calling mt-3" />
+              <p className="mt-3 text-sm text-foreground">Please proceed to the service area.</p>
+              <Button className="mt-5" variant="outline" onClick={() => setCallAlertOpen(false)}>Close</Button>
+            </div>
+          </section>
+        </div>
       ) : null}
       <div
         className={cn(

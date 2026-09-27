@@ -5,6 +5,7 @@ import { SimpleBarChart } from '../../components/ui/simple-bar-chart'
 import { StatCard } from '../../components/ui/stat-card'
 import { ErrorState, LoadingState } from '../../components/ui/states'
 import { useAuth } from '../../hooks/use-auth'
+import { useAdminRealtimeContext } from '../../hooks/use-admin-realtime-context'
 import { analyticsService } from '../../services/api'
 import { formatWait } from '../../lib/format'
 
@@ -32,6 +33,7 @@ type Analytics = {
 
 export function AdminAnalyticsPage() {
   const { user } = useAuth()
+  const { queueRevision } = useAdminRealtimeContext()
   const clinicId = user?.clinic?.identifier
   const [fromDate, setFromDate] = useState(() => localDateValue(new Date()))
   const [toDate, setToDate] = useState(() => localDateValue(new Date()))
@@ -54,7 +56,6 @@ export function AdminAnalyticsPage() {
       setError(null)
     } catch (caught) {
       console.error('[Queue-Nect] Analytics load failed:', caught)
-      setData(null)
       setError('Unable to load analytics. Please try again.')
     } finally {
       setLoading(false)
@@ -64,6 +65,10 @@ export function AdminAnalyticsPage() {
   useEffect(() => {
     void load()
   }, [load])
+
+  useEffect(() => {
+    if (queueRevision > 0) void load()
+  }, [queueRevision, load])
 
   return (
     <div>

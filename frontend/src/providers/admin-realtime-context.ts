@@ -6,6 +6,7 @@ export type AdminRealtimeState = {
   presence: QueuePresence[]
   status: 'connecting' | 'connected' | 'reconnecting' | 'disconnected'
   now: number
+  queueRevision: number
   clearEvents: () => void
 }
 

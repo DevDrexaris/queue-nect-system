@@ -19,6 +19,7 @@ export type QueuePresence = {
 export function useAdminRealtime(organizationId: string | undefined) {
   const [events, setEvents] = useState<AdminActivityEvent[]>([])
   const [presence, setPresence] = useState<QueuePresence[]>([])
+  const [queueRevision, setQueueRevision] = useState(0)
   const [now, setNow] = useState(0)
   const [status, setStatus] = useState<'connecting' | 'connected' | 'reconnecting' | 'disconnected'>('connecting')
   const offlineNotified = useRef(new Set<string>())
@@ -64,7 +65,10 @@ export function useAdminRealtime(organizationId: string | undefined) {
       })
       .on('postgres_changes', {
         event: '*', schema: 'public', table: 'queue_entries', filter: `organization_id=eq.${organizationId}`,
-      }, () => void load())
+      }, () => {
+        setQueueRevision((value) => value + 1)
+        void load()
+      })
       .subscribe((nextStatus) => {
         if (nextStatus === 'SUBSCRIBED') {
           setStatus('connected')
@@ -111,5 +115,5 @@ export function useAdminRealtime(organizationId: string | undefined) {
     setEvents([])
   }
 
-  return { events, presence, status, now, clearEvents }
+  return { events, presence, status, now, queueRevision, clearEvents }
 }

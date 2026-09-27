@@ -3,6 +3,7 @@ import { supabaseAnon } from '../lib/supabase'
 import { readStoredTicket } from '../lib/ticket'
 
 type Presence = 'ONLINE' | 'IDLE' | 'BACKGROUND' | 'OFFLINE'
+type QueueRealtimeReason = 'realtime' | 'resume'
 const IDLE_AFTER_MS = 2 * 60 * 1000
 const HEARTBEAT_MS = 45 * 1000
 
@@ -12,7 +13,7 @@ async function hashToken(token: string) {
   return Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, '0')).join('')
 }
 
-export function useStudentQueueRealtime(onChange: () => void, enabled = true) {
+export function useStudentQueueRealtime(onChange: (reason?: QueueRealtimeReason) => void, enabled = true) {
   const callback = useRef(onChange)
 
   useEffect(() => {
@@ -31,6 +32,9 @@ export function useStudentQueueRealtime(onChange: () => void, enabled = true) {
     let heartbeat: number | undefined
     let idleCheck: number | undefined
     let blurTimer: number | undefined
+    let tokenHash: string | null = null
+    let reconnectTimer: number | undefined
+    let lastResumeAt = 0
 
     const updatePresence = async (next: Presence, heartbeat = false) => {
       if (disposed || next === presence && !heartbeat) return
@@ -49,14 +53,48 @@ export function useStudentQueueRealtime(onChange: () => void, enabled = true) {
       lastActivity = Date.now()
       if (document.visibilityState === 'visible') void updatePresence('ONLINE')
     }
+    const reconnect = () => {
+      if (disposed || document.visibilityState !== 'visible' || !navigator.onLine) return
+      const now = Date.now()
+      if (now - lastResumeAt < 1000) return
+      lastResumeAt = now
+      void updatePresence('ONLINE', true)
+      callback.current('resume')
+      if (!tokenHash) return
+      window.clearTimeout(reconnectTimer)
+      reconnectTimer = window.setTimeout(() => {
+        if (disposed || !tokenHash) return
+        if (channel) void supabaseAnon.removeChannel(channel)
+        channel = supabaseAnon
+          .channel(`student-queue:${tokenHash}`, { config: { private: true } })
+          .on('broadcast', { event: 'queue_status_changed' }, (message) => {
+            const payload = message?.payload as { status?: string } | undefined
+            if (!payload || !['WAITING', 'CALLED', 'SERVING', 'AWAITING_RETURN', 'COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(payload.status ?? '')) {
+              console.warn('[Queue-Nect] Ignoring malformed student queue realtime event.', message)
+              return
+            }
+            callback.current('realtime')
+          })
+          .subscribe((status) => {
+            if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+              console.error('[Queue-Nect] Student queue realtime connection failed:', status)
+            }
+          })
+      }, 0)
+    }
+
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') void updatePresence('BACKGROUND')
-      else markActive()
+      else {
+        markActive()
+        reconnect()
+      }
     }
-    const onPageHide = () => {
-      if (document.visibilityState === 'visible') void updatePresence('OFFLINE')
+    const onPageShow = () => {
+      markActive()
+      reconnect()
     }
-    const onPageShow = () => markActive()
+    const onOnline = () => reconnect()
     const onBlur = () => {
       window.clearTimeout(blurTimer)
       blurTimer = window.setTimeout(() => {
@@ -75,19 +113,29 @@ export function useStudentQueueRealtime(onChange: () => void, enabled = true) {
       void updatePresence(next, true)
     }
 
-    void hashToken(ticket.statusToken).then((tokenHash) => {
+    void hashToken(ticket.statusToken).then((nextTokenHash) => {
       if (disposed) return
+      tokenHash = nextTokenHash
       channel = supabaseAnon
-        .channel(`student-queue:${tokenHash}`, { config: { private: true } })
-        .on('broadcast', { event: 'queue_status_changed' }, () => callback.current())
-        .subscribe((status) => {
-          if (status === 'SUBSCRIBED') callback.current()
+        .channel(`student-queue:${nextTokenHash}`, { config: { private: true } })
+        .on('broadcast', { event: 'queue_status_changed' }, (message) => {
+          const payload = message?.payload as { status?: string } | undefined
+          if (!payload || !['WAITING', 'CALLED', 'SERVING', 'AWAITING_RETURN', 'COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(payload.status ?? '')) {
+            console.warn('[Queue-Nect] Ignoring malformed student queue realtime event.', message)
+            return
+          }
+          callback.current('realtime')
         })
-    }).catch(() => undefined)
+        .subscribe((status) => {
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            console.error('[Queue-Nect] Student queue realtime connection failed:', status)
+          }
+        })
+    }).catch((caught) => console.error('[Queue-Nect] Student queue realtime setup failed:', caught))
 
     document.addEventListener('visibilitychange', onVisibility)
-    window.addEventListener('pagehide', onPageHide)
     window.addEventListener('pageshow', onPageShow)
+    window.addEventListener('online', onOnline)
     window.addEventListener('focus', markActive)
     window.addEventListener('blur', onBlur)
     for (const event of ['pointerdown', 'keydown', 'touchstart'] as const) {
@@ -108,15 +156,15 @@ export function useStudentQueueRealtime(onChange: () => void, enabled = true) {
       window.clearInterval(idleCheck)
       window.clearTimeout(blurTimer)
       document.removeEventListener('visibilitychange', onVisibility)
-      window.removeEventListener('pagehide', onPageHide)
       window.removeEventListener('pageshow', onPageShow)
+      window.removeEventListener('online', onOnline)
       window.removeEventListener('focus', markActive)
       window.removeEventListener('blur', onBlur)
       for (const event of ['pointerdown', 'keydown', 'touchstart'] as const) {
         window.removeEventListener(event, markActive)
       }
+      window.clearTimeout(reconnectTimer)
       if (channel) void supabaseAnon.removeChannel(channel)
-      if (document.visibilityState === 'visible') void updatePresence('OFFLINE')
     }
   }, [enabled])
 }
