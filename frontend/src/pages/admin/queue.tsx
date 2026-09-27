@@ -12,6 +12,7 @@ import { SearchInput } from '../../components/ui/search-input'
 import { Select } from '../../components/ui/select'
 import { EmptyState, ErrorState, LoadingState } from '../../components/ui/states'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
+import { ActionItem, ActionMenu } from '../../components/ui/action-menu'
 import { TBody, TD, TH, THead, TR, Table } from '../../components/ui/table'
 import { useAuth } from '../../hooks/use-auth'
 import { useQueueSnapshot } from '../../hooks/use-queue-snapshot'
@@ -131,46 +132,38 @@ export function AdminQueuePage() {
   const calledEntry = data?.entries.find((item) => item.status === 'CALLED') ?? null
 
   function renderQueueActions(item: QueueEntry) {
-    if (item.status === 'WAITING') {
-      return (
-        <>
-          <Button size="sm" onClick={() => void run('call', item)}>Call</Button>
-          <Button size="sm" variant="outline" onClick={() => requestQueueAction(item, 'cancel')}>Cancel</Button>
-          <Button size="sm" variant="outline" onClick={() => requestQueueAction(item, 'skip')}>Mark No-show</Button>
-        </>
-      )
-    }
-
-    if (item.status === 'CALLED') {
-      return (
-        <>
-          <Button size="sm" onClick={() => void run('serve', item)}>Serve</Button>
-          <Button size="sm" variant="outline" onClick={() => void run('return_to_waiting', item)}>Return to Waiting</Button>
-          <Button size="sm" variant="outline" onClick={() => requestQueueAction(item, 'cancel')}>Cancel</Button>
-          <Button size="sm" variant="outline" onClick={() => requestQueueAction(item, 'skip')}>Mark No-show</Button>
-        </>
-      )
-    }
-
-    if (item.status === 'SERVING') {
-      return (
-        <>
-          <Button size="sm" variant="outline" onClick={() => requestQueueAction(item, 'awaiting_return')}>Awaiting Return</Button>
-          <Button size="sm" onClick={() => void run('complete', item)}>Finish Service</Button>
-          <Button size="sm" variant="outline" onClick={() => requestQueueAction(item, 'cancel')}>Cancel</Button>
-        </>
-      )
-    }
-
-    if (item.status === 'AWAITING_RETURN') {
-      return <Button size="sm" onClick={() => void run('call_again', item)}>Call Again</Button>
-    }
-
-    if (['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(item.status)) {
-      return <Button size="sm" variant="destructive" onClick={() => requestQueueAction(item, 'delete')}>Delete</Button>
-    }
-
-    return null
+    return (
+      <ActionMenu label="Manage">
+        {item.status === 'WAITING' ? (
+          <>
+            <ActionItem onClick={() => void run('call', item)}>Call</ActionItem>
+            <ActionItem onClick={() => requestQueueAction(item, 'cancel')}>Cancel</ActionItem>
+            <ActionItem onClick={() => requestQueueAction(item, 'skip')}>Mark No-show</ActionItem>
+          </>
+        ) : null}
+        {item.status === 'CALLED' ? (
+          <>
+            <ActionItem onClick={() => void run('serve', item)}>Serve</ActionItem>
+            <ActionItem onClick={() => void run('return_to_waiting', item)}>Return to Waiting</ActionItem>
+            <ActionItem onClick={() => requestQueueAction(item, 'cancel')}>Cancel</ActionItem>
+            <ActionItem onClick={() => requestQueueAction(item, 'skip')}>Mark No-show</ActionItem>
+          </>
+        ) : null}
+        {item.status === 'SERVING' ? (
+          <>
+            <ActionItem onClick={() => requestQueueAction(item, 'awaiting_return')}>Awaiting Return</ActionItem>
+            <ActionItem onClick={() => void run('complete', item)}>Finish Service</ActionItem>
+            <ActionItem onClick={() => requestQueueAction(item, 'cancel')}>Cancel</ActionItem>
+          </>
+        ) : null}
+        {item.status === 'AWAITING_RETURN' ? (
+          <ActionItem onClick={() => void run('call_again', item)}>Call Again</ActionItem>
+        ) : null}
+        {['COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(item.status) ? (
+          <ActionItem destructive onClick={() => requestQueueAction(item, 'delete')}>Delete</ActionItem>
+        ) : null}
+      </ActionMenu>
+    )
   }
 
   return (
