@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { RefreshCw } from 'lucide-react'
+import { Lock, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '../../components/ui/button'
 import { Dialog } from '../../components/ui/dialog'
@@ -26,6 +26,8 @@ export function AdminQueuePage() {
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<string>('all')
   const [pending, setPending] = useState<QueueEntry | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<QueueEntry | null>(null)
+  const [deleteConfirmed, setDeleteConfirmed] = useState(false)
   const [resetting, setResetting] = useState(false)
   const [resetPending, setResetPending] = useState(false)
   const [resetConfirmed, setResetConfirmed] = useState(false)
@@ -80,6 +82,8 @@ export function AdminQueuePage() {
     try {
       await queueService.deleteEntry(entry.id)
       toast.success(`Deleted ${entry.queueNumber}`)
+      setDeleteTarget(null)
+      setDeleteConfirmed(false)
       await reload()
     } catch (caught) {
       toast.error(userMessage(caught))
@@ -213,18 +217,15 @@ export function AdminQueuePage() {
                       <QueueStatusBadge status={item.status as QueueStatus} />
                     </TD>
                     <TD>
-                      <ActionMenu>
-                        <ActionItem onClick={() => void run('call', item)}>Call</ActionItem>
-                        <ActionItem onClick={() => void run('serve', item)}>Serve</ActionItem>
-                        <ActionItem onClick={() => void run('recall', item)}>Set waiting</ActionItem>
-                        <ActionItem onClick={() => void run('skip', item)}>Skip</ActionItem>
+                      <ActionMenu label="Manage">
                         <ActionItem destructive onClick={() => setPending(item)}>
                           Cancel
                         </ActionItem>
                         <ActionItem
                           destructive
                           disabled={['WAITING', 'CALLED', 'SERVING'].includes(item.status)}
-                          onClick={() => void removeQueueEntry(item)}
+                          icon={<Lock className="size-4" />}
+                          onClick={() => setDeleteTarget(item)}
                         >
                           Delete
                         </ActionItem>
@@ -240,18 +241,15 @@ export function AdminQueuePage() {
               <div key={item.id} className="rounded-xl border border-border bg-card p-4">
                 <div className="flex items-start justify-between gap-3">
                   <QueueNumber value={item.queueNumber} size="sm" />
-                  <ActionMenu>
-                    <ActionItem onClick={() => void run('call', item)}>Call</ActionItem>
-                    <ActionItem onClick={() => void run('serve', item)}>Serve</ActionItem>
-                    <ActionItem onClick={() => void run('recall', item)}>Set waiting</ActionItem>
-                    <ActionItem onClick={() => void run('skip', item)}>Skip</ActionItem>
+                  <ActionMenu label="Manage">
                     <ActionItem destructive onClick={() => setPending(item)}>
                       Cancel
                     </ActionItem>
                     <ActionItem
                       destructive
                       disabled={['WAITING', 'CALLED', 'SERVING'].includes(item.status)}
-                      onClick={() => void removeQueueEntry(item)}
+                      icon={<Lock className="size-4" />}
+                      onClick={() => setDeleteTarget(item)}
                     >
                       Delete
                     </ActionItem>
@@ -289,6 +287,42 @@ export function AdminQueuePage() {
           </>
         }
       />
+
+      <Dialog
+        open={Boolean(deleteTarget)}
+        onClose={() => {
+          setDeleteTarget(null)
+          setDeleteConfirmed(false)
+        }}
+        title="Delete inactive queue number?"
+        description={deleteTarget ? `This permanently removes ${deleteTarget.queueNumber} from the queue log. Only do this for numbers that are already cancelled, skipped, or otherwise no longer needed.` : undefined}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => { setDeleteTarget(null); setDeleteConfirmed(false) }}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={!deleteConfirmed || !deleteTarget}
+              onClick={() => deleteTarget && void removeQueueEntry(deleteTarget)}
+            >
+              Delete permanently
+            </Button>
+          </>
+        }
+      >
+        <label className="mt-2 flex items-start gap-3 rounded-lg border border-border bg-muted/40 p-3 text-sm text-foreground">
+          <input
+            type="checkbox"
+            checked={deleteConfirmed}
+            onChange={(event) => setDeleteConfirmed(event.target.checked)}
+            className="mt-1 size-4"
+          />
+          <span>
+            I confirm this queue number is inactive and I want to permanently delete it from the session.
+          </span>
+        </label>
+      </Dialog>
 
       <Dialog
         open={resetPending}

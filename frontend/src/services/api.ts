@@ -629,6 +629,38 @@ export const queueService = {
     }
   },
 
+  cancelEntry: async (clinicIdentifier: string, queueId: string) => {
+    const { data: org, error: orgError } = await getOrgIdFromClinicIdentifier(clinicIdentifier)
+    if (orgError) throw orgError
+    if (!org) throw new Error('Clinic not found.')
+
+    const { data: current, error: currentError } = await supabase
+      .from('queue_entries')
+      .select('*')
+      .eq('organization_id', org.id)
+      .eq('id', queueId)
+      .single()
+
+    if (currentError) throw currentError
+    if (!['WAITING', 'CALLED'].includes(current.status)) {
+      throw new Error('This queue number can no longer be cancelled.')
+    }
+
+    const { data, error } = await supabase
+      .from('queue_entries')
+      .update({
+        status: 'CANCELLED',
+        cancelled_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', queueId)
+      .select('*')
+      .single()
+
+    if (error) throw error
+    return data
+  },
+
   deleteEntry: async (queueId: string) => {
     const { data: existing, error: fetchError } = await supabase
       .from('queue_entries')

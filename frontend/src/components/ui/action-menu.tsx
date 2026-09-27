@@ -46,11 +46,13 @@ export function ActionItem({
   onClick,
   destructive,
   disabled,
+  icon,
 }: {
   children: ReactNode
   onClick?: () => void
   destructive?: boolean
   disabled?: boolean
+  icon?: ReactNode
 }) {
   return (
     <button
@@ -63,6 +65,7 @@ export function ActionItem({
         destructive && 'text-destructive',
       )}
     >
+      {icon ? <span className="mr-2 inline-flex items-center justify-center">{icon}</span> : null}
       {children}
     </button>
   )

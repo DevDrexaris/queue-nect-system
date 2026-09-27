@@ -9,8 +9,9 @@ import { Card, CardContent } from '../../components/ui/card'
 import { QueueNumber } from '../../components/ui/queue-number'
 import { QueueStatusBadge } from '../../components/ui/queue-status-badge'
 import { ConnectionBanner } from '../../components/ui/connection-banner'
+import { Dialog } from '../../components/ui/dialog'
+import { Button, buttonVariants } from '../../components/ui/button'
 import { EmptyState, ErrorState, LoadingState } from '../../components/ui/states'
-import { buttonVariants } from '../../components/ui/button'
 import { formatElapsedMinutes, formatServiceRange, formatWait } from '../../lib/format'
 import { cn } from '../../lib/utils'
 import type { QueueEntry, QueueSnapshot } from '../../types'
@@ -86,6 +87,9 @@ export function QueueStatusPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(Boolean(ticket))
   const [notificationEnabled, setNotificationEnabled] = useState(false)
+  const [canceling, setCanceling] = useState(false)
+  const [showCancelPrompt, setShowCancelPrompt] = useState(false)
+  const [cancelConfirmed, setCancelConfirmed] = useState(false)
   const lastCallKeyRef = useRef<string | null>(null)
 
   const load = useCallback(async () => {
@@ -140,6 +144,21 @@ export function QueueStatusPage() {
     }
   }, [entry])
 
+  async function cancelQueue() {
+    if (!ticket || !entry) return
+    setCanceling(true)
+    try {
+      await queueService.cancelEntry(ticket.clinicIdentifier, entry.id)
+      setShowCancelPrompt(false)
+      setCancelConfirmed(false)
+      await load()
+    } catch (caught) {
+      setError(userMessage(caught))
+    } finally {
+      setCanceling(false)
+    }
+  }
+
   if (!ticket) {
     return (
       <EmptyState
@@ -180,6 +199,14 @@ export function QueueStatusPage() {
         </div>
         <p className="mt-4 text-sm font-medium">{headline(entry)}</p>
       </div>
+
+      {entry.status === 'WAITING' || entry.status === 'CALLED' ? (
+        <div className="flex justify-center">
+          <Button variant="outline" onClick={() => setShowCancelPrompt(true)} className="border-destructive text-destructive hover:bg-destructive/5">
+            Cancel my queue
+          </Button>
+        </div>
+      ) : null}
 
       <Card>
         <CardContent className="grid grid-cols-2 gap-4">
@@ -248,6 +275,40 @@ export function QueueStatusPage() {
           ))}
         </div>
       ) : null}
+
+      <Dialog
+        open={showCancelPrompt}
+        onClose={() => {
+          setShowCancelPrompt(false)
+          setCancelConfirmed(false)
+        }}
+        title="Cancel your queue?"
+        description="This will remove your queue number from the active line. You can only cancel while your number is still waiting or called, before service begins."
+        footer={
+          <>
+            <Button variant="outline" onClick={() => { setShowCancelPrompt(false); setCancelConfirmed(false) }}>
+              Keep my place
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={!cancelConfirmed || canceling}
+              onClick={() => void cancelQueue()}
+            >
+              {canceling ? 'Cancelling...' : 'Yes, cancel now'}
+            </Button>
+          </>
+        }
+      >
+        <label className="flex items-start gap-3 rounded-lg border border-border bg-muted/40 p-3 text-sm text-foreground">
+          <input
+            type="checkbox"
+            checked={cancelConfirmed}
+            onChange={(event) => setCancelConfirmed(event.target.checked)}
+            className="mt-1 size-4"
+          />
+          <span>I understand my queue number will be cancelled and I will need to rejoin if I return.</span>
+        </label>
+      </Dialog>
     </div>
   )
 }
