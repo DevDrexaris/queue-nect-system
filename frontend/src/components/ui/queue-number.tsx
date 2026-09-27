@@ -1,10 +1,11 @@
 import { cn } from '../../lib/utils'
 
 const sizes = {
-  sm: 'text-lg',
+  sm: 'text-xl',
   md: 'text-3xl',
   lg: 'text-5xl sm:text-6xl',
-  display: 'text-[clamp(4.5rem,14vw,11rem)] leading-none',
+  next: 'text-3xl lg:text-5xl 2xl:text-6xl',
+  display: 'text-[clamp(5rem,11vw,16rem)] leading-[0.9]',
 } as const
 
 export function QueueNumber({
@@ -19,7 +20,7 @@ export function QueueNumber({
   return (
     <span
       className={cn(
-        'font-mono font-semibold tracking-tight tabular-nums text-foreground',
+        'queue-number font-display font-bold tracking-[0.025em] tabular-nums text-foreground',
         sizes[size],
         className,
       )}

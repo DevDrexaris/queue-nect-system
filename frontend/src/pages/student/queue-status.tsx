@@ -207,7 +207,7 @@ export function QueueStatusPage() {
         className={cn(
           'rounded-xl border p-5 text-center',
           entry.status === 'WAITING' && 'border-status-waiting/25 bg-status-waiting/10',
-          entry.status === 'CALLED' && 'border-status-called/25 bg-status-called/10',
+          entry.status === 'CALLED' && 'border-status-calling/35 bg-status-calling/10',
           entry.status === 'SERVING' && 'border-status-serving/25 bg-status-serving/10',
           (entry.status === 'SERVED' || entry.status === 'COMPLETED') && 'border-border bg-muted',
           entry.status === 'NO_SHOW' && 'border-status-no-show/25 bg-status-no-show/10',
@@ -215,7 +215,7 @@ export function QueueStatusPage() {
       >
         <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Your number</p>
         <div className="mt-2">
-          <QueueNumber value={entry.queueNumber} size="lg" />
+          <QueueNumber value={entry.queueNumber} size="lg" className={entry.status === 'CALLED' ? 'queue-number-calling' : undefined} />
         </div>
         <p className="mt-4 text-sm font-medium">{headline(entry)}</p>
       </div>

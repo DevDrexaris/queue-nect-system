@@ -12,8 +12,8 @@ const config: Record<
     icon: CircleDashed,
   },
   CALLED: {
-    label: 'Called',
-    className: 'border border-status-called/20 bg-status-called/10 text-status-called',
+    label: 'Calling',
+    className: 'border border-status-calling/25 bg-status-calling/10 text-status-calling',
     icon: Bell,
   },
   SERVING: {

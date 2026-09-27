@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#0B2A4A" />
+    <meta name="theme-color" content="#111922" />
     <meta name="description" content="Queue-Nect — Smart Queuing" />
     <script>
       (() => {
@@ -12,7 +12,8 @@
           const saved = localStorage.getItem('queue-nect-theme')
           const legacy = localStorage.getItem('queue-nect-admin-theme')
           const theme = saved || (legacy === 'light' ? 'light' : legacy === 'dark' ? 'dark' : 'system')
-          const dark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+          const isDisplay = /^\/(display|tv)(\/|$)/.test(window.location.pathname)
+          const dark = isDisplay || theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
           document.documentElement.classList.toggle('dark', dark)
         } catch {
           document.documentElement.classList.toggle('dark', window.matchMedia('(prefers-color-scheme: dark)').matches)
@@ -22,7 +23,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600;700&family=Inter:wght@400;500;600;700&family=Roboto+Condensed:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
     <title>Queue-Nect</title>

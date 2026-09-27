@@ -6,7 +6,7 @@ import { QueueNumber } from '../../components/ui/queue-number'
 import { useQueueSnapshot } from '../../hooks/use-queue-snapshot'
 import { queueService } from '../../services/api'
 import { cn } from '../../lib/utils'
-import { ThemeSelector } from '../../components/ui/theme-selector'
+import { QueueEventAnimation, type QueueEventKind } from '../../components/ui/queue-event-animation'
 
 export function TvDisplayPage() {
   const { clinicId } = useParams()
@@ -15,8 +15,9 @@ export function TvDisplayPage() {
   const { data, error, loading } = useQueueSnapshot(identifier || undefined, 3000)
   const [now, setNow] = useState(() => new Date())
   const [qr, setQr] = useState('')
-  const [flash, setFlash] = useState(false)
-  const lastCalled = useRef<string | null>(null)
+  const [queueEvent, setQueueEvent] = useState<{ kind: QueueEventKind; sequence: number } | null>(null)
+  const lastActiveKey = useRef<string | null>(null)
+  const eventSequence = useRef(0)
 
   useEffect(() => {
     const media = window.matchMedia('(min-width: 1280px)')
@@ -61,21 +62,34 @@ export function TvDisplayPage() {
 
   const serving = data?.entries.find((entry) => entry.status === 'SERVING') ?? null
   const calling = data?.entries.find((entry) => entry.status === 'CALLED') ?? null
+  const primary = calling ?? serving
   const next = [...(calling ? [calling] : []), ...(data?.entries.filter((entry) => entry.status === 'WAITING') ?? [])].slice(0, 4)
   const active = Boolean(serving || calling || next.length)
   const isCalling = Boolean(calling)
+  const primaryId = primary?.id
+  const primaryQueueNumber = primary?.queueNumber
+  const primaryStatus = primary?.status
 
   useEffect(() => {
-    const currentCallNumber = calling?.queueNumber ?? serving?.queueNumber
-    if (!currentCallNumber) return
-    if (lastCalled.current && lastCalled.current !== currentCallNumber) {
-      setFlash(true)
-      const timeout = window.setTimeout(() => setFlash(false), 1200)
-      lastCalled.current = currentCallNumber
-      return () => window.clearTimeout(timeout)
+    const key = primaryId && primaryQueueNumber && primaryStatus
+      ? `${primaryId}:${primaryQueueNumber}:${primaryStatus}`
+      : null
+    const previousKey = lastActiveKey.current
+    lastActiveKey.current = key
+
+    if (!key || !previousKey || key === previousKey) return
+
+    const kind = primaryStatus === 'CALLED' ? 'called' : primaryStatus === 'SERVING' ? 'served' : null
+    if (!kind) return
+
+    const event: { kind: QueueEventKind; sequence: number } = { kind, sequence: ++eventSequence.current }
+    const showTimeout = window.setTimeout(() => setQueueEvent(event), 0)
+    const clearTimeout = window.setTimeout(() => setQueueEvent(null), 900)
+    return () => {
+      window.clearTimeout(showTimeout)
+      window.clearTimeout(clearTimeout)
     }
-    lastCalled.current = currentCallNumber
-  }, [calling?.queueNumber, serving?.queueNumber])
+  }, [primaryId, primaryQueueNumber, primaryStatus])
 
   return (
     <div className="flex min-h-dvh flex-col px-4 py-5 sm:px-8 sm:py-6 lg:px-14 lg:py-8">
@@ -84,8 +98,7 @@ export function TvDisplayPage() {
           <Logo inverted size="lg" />
           <h1 className="mt-4 text-2xl font-semibold tracking-tight sm:text-3xl lg:text-5xl">{data?.clinic.name || identifier || 'Clinic Display'}</h1>
         </div>
-        <div className="flex w-full items-center justify-between gap-3 sm:w-auto sm:flex-col sm:items-end">
-          <ThemeSelector />
+        <div className="flex w-full items-center justify-end gap-3 sm:w-auto sm:flex-col sm:items-end">
           <div className="text-right">
           <p className="font-mono text-2xl tabular-nums lg:text-4xl">
             {now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -108,23 +121,33 @@ export function TvDisplayPage() {
               className={cn(
                 'rounded-3xl border border-border bg-card p-8 text-center transition-colors duration-300',
                 isCalling
-                  ? 'border-status-called/40 bg-status-called/10'
+                  ? 'border-status-calling/45 bg-status-calling/10'
                   : '',
-                flash && 'border-status-called/50 bg-status-called/15',
               )}
             >
-              <div className={cn('mb-3 flex items-center justify-center gap-2 text-sm font-medium tracking-[0.25em] uppercase', isCalling ? 'text-status-called' : 'text-status-serving')}>
+              <div className={cn('mb-3 flex items-center justify-center gap-2 text-sm font-medium tracking-[0.25em] uppercase', isCalling ? 'text-status-calling' : 'text-status-serving')}>
                 <span>{isCalling ? 'Calling' : 'Now serving'}</span>
-                {isCalling ? <span className="size-2.5 animate-pulse rounded-full bg-status-called" /> : null}
+                {isCalling ? <span className="size-2.5 animate-pulse rounded-full bg-status-calling" /> : null}
               </div>
-              <div className="mt-4">
-                <QueueNumber value={calling?.queueNumber ?? serving?.queueNumber ?? '—'} size="display" className={isCalling ? 'text-status-called' : 'text-status-serving'} />
+              <div className="mt-4 flex justify-center">
+                <div className="relative inline-flex items-center justify-center">
+                  {queueEvent ? <QueueEventAnimation key={queueEvent.sequence} kind={queueEvent.kind} /> : null}
+                  <QueueNumber
+                    value={primary?.queueNumber ?? '—'}
+                    size="display"
+                    className={cn(
+                      'relative z-10 transition-[color,text-shadow] duration-300',
+                      isCalling ? 'queue-number-calling' : 'text-status-serving',
+                      queueEvent && 'queue-number-enter',
+                    )}
+                  />
+                </div>
               </div>
               {serving && calling && serving.id !== calling.id ? (
                 <div className="mt-6 rounded-2xl border border-border bg-surface p-4 text-left">
                   <p className="text-[10px] font-medium tracking-[0.2em] text-muted-foreground uppercase">Currently serving</p>
                   <div className="mt-2 flex items-center justify-between gap-3">
-                    <QueueNumber value={serving.queueNumber} size="sm" className="text-foreground" />
+                    <QueueNumber value={serving.queueNumber} size="sm" className="text-status-serving" />
                     <span className="text-sm text-foreground">{serving.studentName}</span>
                   </div>
                 </div>
@@ -151,15 +174,19 @@ export function TvDisplayPage() {
                     <li
                       key={item.id}
                       className={cn(
-                        'rounded-2xl px-5 py-4 font-mono text-3xl font-semibold tabular-nums lg:text-5xl transition-all',
+                        'rounded-2xl px-5 py-4 transition-colors duration-300',
                         item.status === 'CALLED'
-                          ? 'border border-status-called/25 bg-status-called/10 text-status-called'
-                          : 'border border-border bg-surface text-foreground',
+                          ? 'border border-status-calling/30 bg-status-calling/10'
+                          : 'border border-border bg-surface',
                       )}
                     >
                       <span className="flex items-center justify-between gap-2">
-                        <span>{item.queueNumber}</span>
-                        {item.status === 'CALLED' ? <span className="text-xs tracking-[0.2em] uppercase text-status-called">Calling</span> : null}
+                        <QueueNumber
+                          value={item.queueNumber}
+                          size="next"
+                          className={item.status === 'CALLED' ? 'queue-number-calling' : 'text-foreground'}
+                        />
+                        {item.status === 'CALLED' ? <span className="text-xs tracking-[0.2em] uppercase text-status-calling">Calling</span> : null}
                       </span>
                     </li>
                   ))}

@@ -30,12 +30,14 @@ import { SuperAdminActivityPage } from './pages/super-admin/activity'
 import { SuperAdminSettingsPage } from './pages/super-admin/settings'
 import { TvDisplayPage } from './pages/display/tv-display'
 import { ThemeProvider } from './providers/theme-provider'
+import { ThemeRouteSync } from './providers/theme-route-sync'
 
 export default function App() {
   return (
     <ThemeProvider>
       <AuthProvider>
         <BrowserRouter>
+          <ThemeRouteSync />
           <AppToaster />
           <Routes>
           <Route path="/" element={<HomePage />} />

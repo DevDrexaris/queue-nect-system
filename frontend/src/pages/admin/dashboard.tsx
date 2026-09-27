@@ -96,17 +96,17 @@ export function AdminDashboardPage() {
             <div className="relative">
               <Button
                 size="sm"
-                variant={calledEntry ? 'default' : 'outline'}
-                className={calledEntry ? 'animate-pulse' : ''}
+                variant="outline"
+                className={calledEntry ? 'border-status-calling/45 bg-status-calling/10 text-status-calling' : ''}
                 onClick={() => void serveNext()}
                 loading={calling}
               >
                 Serve next
               </Button>
-              {calledEntry && serving?.status === 'CALLED' ? (
-                <div className="pointer-events-none absolute -top-5 right-0 z-10 inline-flex items-center gap-1 rounded-full border border-status-serving/25 bg-status-serving/10 px-1.5 py-0.5 text-[7px] font-medium tracking-[0.12em] text-status-serving animate-[queue-call-toast_220ms_ease-out]">
-                  <span className="h-1.25 w-1.25 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.9)]" />
-                  SERVE
+              {calledEntry ? (
+                <div className="pointer-events-none absolute -top-5 right-0 z-10 inline-flex items-center gap-1 rounded-full border border-status-calling/25 bg-status-calling/10 px-1.5 py-0.5 text-[8px] font-medium tracking-[0.12em] text-status-calling animate-[queue-call-toast_220ms_ease-out]">
+                  <span className="size-1.5 animate-pulse rounded-full bg-status-calling" />
+                  CALLING
                 </div>
               ) : null}
             </div>
@@ -131,7 +131,7 @@ export function AdminDashboardPage() {
                 className={[
                   'relative overflow-hidden rounded-xl border border-border bg-card p-4',
                   serving.status === 'CALLED'
-                    ? 'border-status-called/40 bg-status-called/10 animate-[queue-call-toast_220ms_ease-out]'
+                    ? 'border-status-calling/45 bg-status-calling/10'
                     : '',
                   serving.status === 'SERVING'
                     ? 'border-status-serving/40 bg-status-serving/10'
@@ -141,7 +141,7 @@ export function AdminDashboardPage() {
                 <QueueNumber
                   value={serving.queueNumber}
                   size="lg"
-                  className={serving.status === 'CALLED' ? 'text-status-called' : 'text-status-serving'}
+                  className={serving.status === 'CALLED' ? 'queue-number-calling' : 'text-status-serving'}
                 />
                 <p className="mt-2 text-sm font-medium">{serving.studentName}</p>
                 <p className="text-sm text-muted-foreground">{serving.purpose}</p>
@@ -178,7 +178,7 @@ export function AdminDashboardPage() {
             {upNext.length ? (
               upNext.slice(0, 3).map((item) => (
                 <div key={item.id} className="flex items-center justify-between rounded-lg bg-muted px-3 py-2">
-                  <QueueNumber value={item.queueNumber} size="sm" />
+                  <QueueNumber value={item.queueNumber} size="sm" className={item.status === 'CALLED' ? 'queue-number-calling' : undefined} />
                   <span className="text-sm text-muted-foreground">{item.purpose}</span>
                 </div>
               ))
@@ -214,7 +214,7 @@ export function AdminDashboardPage() {
                     {today.map((item) => (
                       <TR key={item.id}>
                         <TD>
-                          <QueueNumber value={item.queueNumber} size="sm" />
+                          <QueueNumber value={item.queueNumber} size="sm" className={item.status === 'CALLED' ? 'queue-number-calling' : undefined} />
                         </TD>
                         <TD>{item.studentName}</TD>
                         <TD>{item.purpose}</TD>
@@ -246,7 +246,7 @@ export function AdminDashboardPage() {
                 {today.map((item) => (
                   <div key={item.id} className="rounded-xl border border-border p-4">
                     <div className="flex items-center justify-between">
-                      <QueueNumber value={item.queueNumber} size="sm" />
+                      <QueueNumber value={item.queueNumber} size="sm" className={item.status === 'CALLED' ? 'queue-number-calling' : undefined} />
                       <QueueStatusBadge status={item.status} />
                     </div>
                     <p className="mt-2 text-sm font-medium">{item.studentName}</p>

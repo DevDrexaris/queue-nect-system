@@ -12,6 +12,7 @@
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --font-display: "Roboto Condensed", "Arial Narrow", sans-serif;
 
   --color-background: var(--qn-bg);
   --color-foreground: var(--qn-fg);
@@ -35,6 +36,7 @@
   --color-warning: var(--qn-warning);
   --color-status-waiting: var(--qn-status-waiting);
   --color-status-called: var(--qn-status-called);
+  --color-status-calling: var(--qn-status-calling);
   --color-status-serving: var(--qn-status-serving);
   --color-status-completed: var(--qn-status-completed);
   --color-status-cancelled: var(--qn-status-cancelled);
@@ -66,6 +68,7 @@
   --qn-warning: #a85b08;
   --qn-status-waiting: #805700;
   --qn-status-called: #205fae;
+  --qn-status-calling: #a34f0b;
   --qn-status-serving: #08784e;
   --qn-status-completed: #59697b;
   --qn-status-cancelled: #b42332;
@@ -94,6 +97,7 @@
   --qn-warning: #f0bf6b;
   --qn-status-waiting: #f0bf6b;
   --qn-status-called: #8db9f4;
+  --qn-status-calling: #f2a45a;
   --qn-status-serving: #67d2a0;
   --qn-status-completed: #a4b2c0;
   --qn-status-cancelled: #ff8a83;
@@ -149,6 +153,16 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+
+  .queue-number-calling {
+    animation: none !important;
+  }
+
+  .queue-number-enter,
+  .queue-event-ring,
+  .queue-event-mark {
+    animation: queue-event-fade 140ms ease-out both !important;
+  }
 }
 
 .tv-brand-wordmark {
@@ -175,6 +189,79 @@
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+@keyframes queue-call-number-pulse {
+  0%,
+  100% {
+    text-shadow: 0 0 0.08em color-mix(in srgb, var(--qn-status-calling) 22%, transparent);
+  }
+  50% {
+    text-shadow: 0 0 0.22em color-mix(in srgb, var(--qn-status-calling) 38%, transparent);
+  }
+}
+
+@keyframes queue-event-ring {
+  from {
+    opacity: 0.72;
+    transform: scale(0.72);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.28);
+  }
+}
+
+@keyframes queue-number-enter {
+  from {
+    opacity: 0.35;
+    transform: translateY(0.12em);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes queue-event-mark {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes queue-event-fade {
+  from { opacity: 0.4; }
+  to { opacity: 1; }
+}
+
+.queue-number-calling {
+  color: var(--qn-status-calling) !important;
+  text-shadow: 0 0 0.16em color-mix(in srgb, var(--qn-status-calling) 30%, transparent);
+  animation: queue-call-number-pulse 1.35s ease-in-out 2;
+}
+
+.queue-number {
+  transition: color 280ms ease, text-shadow 280ms ease;
+}
+
+.queue-number-enter {
+  animation: queue-number-enter 320ms ease-out both;
+}
+
+.queue-event-ring {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: queue-event-ring 760ms ease-out both;
+}
+
+.queue-event-ring-delayed {
+  animation-delay: 110ms;
+}
+
+.queue-event-mark {
+  stroke-dasharray: 48;
+  stroke-dashoffset: 48;
+  animation: queue-event-mark 420ms ease-out 120ms forwards;
 }
 
 @utility tabular {
