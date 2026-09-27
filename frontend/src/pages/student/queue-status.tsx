@@ -17,7 +17,7 @@ import type { QueueEntry, QueueSnapshot } from '../../types'
 function headline(entry: QueueEntry) {
   if (entry.status === 'CALLED') return 'Your number is next. Please proceed to the clinic.'
   if (entry.status === 'SERVING') return 'You are currently being served.'
-  if (entry.status === 'SERVED') return 'Queue completed.'
+  if (entry.status === 'SERVED' || entry.status === 'COMPLETED') return 'Queue completed.'
   if (entry.status === 'CANCELLED') return 'This queue request was cancelled.'
   if (entry.status === 'NO_SHOW') return 'Marked as no show.'
   return 'Please wait for your number to be called.'
@@ -82,7 +82,7 @@ export function QueueStatusPage() {
           'rounded-xl border p-5 text-center',
           entry.status === 'CALLED' && 'border-amber-300 bg-amber-50',
           entry.status === 'SERVING' && 'border-blue-300 bg-blue-50',
-          entry.status === 'SERVED' && 'border-emerald-300 bg-emerald-50',
+          (entry.status === 'SERVED' || entry.status === 'COMPLETED') && 'border-emerald-300 bg-emerald-50',
         )}
       >
         <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Your number</p>

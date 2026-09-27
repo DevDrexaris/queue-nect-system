@@ -2,6 +2,7 @@ export const QUEUE_STATUSES = [
   'WAITING',
   'CALLED',
   'SERVING',
+  'COMPLETED',
   'SERVED',
   'CANCELLED',
   'NO_SHOW',

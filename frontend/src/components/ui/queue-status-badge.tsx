@@ -21,6 +21,11 @@ const config: Record<
     className: 'bg-blue-50 text-blue-800 dark:bg-blue-950/50 dark:text-blue-200',
     icon: LoaderCircle,
   },
+  COMPLETED: {
+    label: 'Served',
+    className: 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200',
+    icon: CheckCircle2,
+  },
   SERVED: {
     label: 'Served',
     className: 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200',

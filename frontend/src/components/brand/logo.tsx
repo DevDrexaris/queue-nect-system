@@ -31,13 +31,12 @@ export function BrandMark({ className, size = 'md' }: BrandProps) {
   )
 }
 
-export function BrandName({ className, size = 'md', inverted = false }: BrandProps) {
+export function BrandName({ className, size = 'md' }: BrandProps) {
   return (
     <span
       className={cn(
         'inline-flex items-center whitespace-nowrap font-semibold tracking-tight',
-        inverted ? 'text-white' : 'text-slate-900',
-        'dark:text-slate-100',
+        'text-black',
         'drop-shadow-[0_0_1px_rgba(15,23,42,0.35)]',
         sizes[size].text,
         className,
