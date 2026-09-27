@@ -72,23 +72,26 @@ async function getQueueClient() {
   return session ? supabase : supabaseAnon
 }
 
+function isRlsPermissionError(error: any) {
+  const message = error?.message ?? ''
+  return /permission denied|row level security|policy|42501/i.test(message)
+}
+
 async function withPublicFallback<T>(
   publicCall: () => Promise<{ data: T | null; error: any }>,
   staffCall?: () => Promise<{ data: T | null; error: any }>
 ): Promise<{ data: T | null; error: any }> {
-  try {
-    return await publicCall()
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error ?? '')
-    const shouldFallback = /permission denied|row level security|policy|42501/i.test(message)
-
-    if (!shouldFallback) throw error
-
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session || !staffCall) throw error
-
-    return await staffCall()
+  const publicResult = await publicCall()
+  if (!publicResult.error || !isRlsPermissionError(publicResult.error)) {
+    return publicResult
   }
+
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session || !staffCall) {
+    return publicResult
+  }
+
+  return await staffCall()
 }
 
 async function getOrgIdFromClinicIdentifier(clinicIdentifier: string) {
