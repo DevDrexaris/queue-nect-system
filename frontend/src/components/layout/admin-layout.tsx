@@ -10,6 +10,7 @@ import {
   Menu,
   QrCode,
   Settings,
+  Sun,
   Users,
   X,
 } from 'lucide-react'
@@ -18,6 +19,7 @@ import { Button } from '../ui/button'
 import { ConnectionBanner } from '../ui/connection-banner'
 import { useAuth } from '../../hooks/use-auth'
 import { useOnlineStatus } from '../../hooks/use-online-status'
+import { useAdminTheme } from '../../hooks/use-admin-theme'
 import { SidebarNav, type NavSection } from './sidebar-nav'
 import { toast } from 'sonner'
 
@@ -66,6 +68,7 @@ export function AdminLayout() {
   const location = useLocation()
   const navigate = useNavigate()
   const online = useOnlineStatus()
+  const { isDark, toggleTheme } = useAdminTheme()
   const title = titles[location.pathname] || 'Admin'
 
   async function onLogout() {
@@ -75,7 +78,7 @@ export function AdminLayout() {
   }
 
   return (
-    <div className="min-h-dvh bg-background">
+    <div className={`${isDark ? 'dark ' : ''}min-h-dvh bg-background`}>
       <ConnectionBanner />
       <div className="flex min-h-dvh">
         <aside className="hidden w-64 shrink-0 border-r border-border bg-card lg:flex lg:flex-col">
@@ -129,6 +132,9 @@ export function AdminLayout() {
               <span className={`size-2 rounded-full ${online ? 'bg-emerald-500' : 'bg-amber-500'}`} />
               {online ? 'Online' : 'Offline'}
             </span>
+            <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'} title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}>
+              <Sun className="size-4" />
+            </Button>
             <div className="relative">
               <Button variant="outline" size="sm" onClick={() => setMenuOpen((value) => !value)} aria-haspopup="menu">
                 {user?.name?.split(' ')[0] || 'Profile'}

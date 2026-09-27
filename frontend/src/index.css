@@ -1,28 +1,5 @@
 @import "tailwindcss";
 
-@font-face {
-  font-family: 'Eternalo';
-  src: url('./assets/Eternalo.ttf') format('truetype');
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
-@keyframes tv-water-brand {
-  0% {
-    background-position: 0% 50%;
-    filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.35));
-  }
-  50% {
-    background-position: 100% 50%;
-    filter: drop-shadow(0 0 16px rgba(255, 255, 255, 0.55));
-  }
-  100% {
-    background-position: 0% 50%;
-    filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.42));
-  }
-}
-
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
@@ -86,44 +63,17 @@
   color-scheme: dark;
 }
 
-@keyframes queue-call-toast {
-  0% {
-    opacity: 0;
-    transform: translateY(-6px) scale(0.96);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-@keyframes queue-card-glow-amber {
-  0%,
-  100% {
-    border-color: rgba(251, 146, 60, 0.75);
-    box-shadow: 0 0 0 1px rgba(251, 146, 60, 0.32), 0 0 16px rgba(251, 146, 60, 0.12);
-  }
-  50% {
-    border-color: rgba(251, 191, 36, 0.92);
-    box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.38), 0 0 24px rgba(251, 146, 60, 0.2);
-  }
-}
-
-@keyframes queue-card-glow-emerald {
-  0%,
-  100% {
-    border-color: rgba(16, 185, 129, 0.75);
-    box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.2), 0 0 18px rgba(16, 185, 129, 0.12);
-  }
-  50% {
-    border-color: rgba(52, 211, 153, 0.95);
-    box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.3), 0 0 26px rgba(16, 185, 129, 0.18);
-  }
-}
-
 @layer base {
   * {
     border-color: var(--qn-border);
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
   }
 
   html {
@@ -161,16 +111,13 @@
 
 .tv-brand-wordmark {
   display: inline-block;
-  font-family: 'Eternalo', serif;
   letter-spacing: 0.02em;
-  background: linear-gradient(90deg, #040404 0%, #ffffff 18%, #080808 34%, #fafafa 52%, #090909 70%, #f5f5f5 100%);
-  background-size: 220% 100%;
+  background: linear-gradient(90deg, #ffffff 0%, #c9e8ff 50%, #ffffff 100%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
   -webkit-text-fill-color: transparent;
   filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.22));
-  animation: tv-water-brand 16s ease-in-out infinite;
 }
 
 @utility tabular {

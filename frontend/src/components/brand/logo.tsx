@@ -11,6 +11,7 @@ const sizes: Record<Size, { mark: string; text: string; gap: string }> = {
 
 type BrandProps = {
   className?: string
+  brandClassName?: string
   size?: Size
   inverted?: boolean
 }
@@ -31,13 +32,14 @@ export function BrandMark({ className, size = 'md' }: BrandProps) {
   )
 }
 
-export function BrandName({ className, size = 'md', inverted = false }: BrandProps) {
+export function BrandName({ className, brandClassName, size = 'md', inverted = false }: BrandProps) {
   return (
     <span
       className={cn(
         'inline-flex items-center whitespace-nowrap font-semibold tracking-tight',
         inverted ? 'tv-brand-wordmark text-white' : 'text-slate-900',
         sizes[size].text,
+        brandClassName,
         className,
       )}
     >
@@ -46,12 +48,12 @@ export function BrandName({ className, size = 'md', inverted = false }: BrandPro
   )
 }
 
-export function Logo({ className, size = 'md', inverted = false }: BrandProps) {
+export function Logo({ className, brandClassName, size = 'md', inverted = false }: BrandProps) {
   return (
     <span className={cn('inline-flex items-center', sizes[size].gap, className)}>
       <BrandMark size={size} inverted={inverted} />
       <span className="flex flex-col leading-none">
-        <BrandName size={size} inverted={inverted} />
+          <BrandName size={size} inverted={inverted} brandClassName={brandClassName} />
         {size === 'lg' ? (
           <span className={cn('mt-1 text-xs font-medium whitespace-nowrap', inverted ? 'text-white/75' : 'text-slate-700', 'dark:text-slate-300')}>
             Smart Queuing

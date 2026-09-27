@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { Activity, Building2, LayoutDashboard, LogOut, Menu, Settings, Shield, Users, X } from 'lucide-react'
+import { Activity, Building2, LayoutDashboard, LogOut, Menu, Settings, Shield, Sun, Users, X } from 'lucide-react'
 import { Logo } from '../brand/logo'
 import { Button } from '../ui/button'
 import { ConnectionBanner } from '../ui/connection-banner'
 import { useAuth } from '../../hooks/use-auth'
 import { SidebarNav, type NavSection } from './sidebar-nav'
+import { useAdminTheme } from '../../hooks/use-admin-theme'
 import { toast } from 'sonner'
 
 const sections: NavSection[] = [
@@ -34,6 +35,7 @@ export function SuperAdminLayout() {
   const [open, setOpen] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
+  const { isDark, toggleTheme } = useAdminTheme()
   const title = titles[location.pathname] || 'Super Admin'
 
   async function onLogout() {
@@ -43,7 +45,7 @@ export function SuperAdminLayout() {
   }
 
   return (
-    <div className="min-h-dvh bg-background">
+    <div className={`${isDark ? 'dark ' : ''}min-h-dvh bg-background`}>
       <ConnectionBanner />
       <div className="flex min-h-dvh">
         <aside className="hidden w-64 shrink-0 border-r border-border bg-card lg:flex lg:flex-col">
@@ -87,6 +89,9 @@ export function SuperAdminLayout() {
               <Shield className="hidden size-4 text-muted-foreground sm:block" />
               <h1 className="truncate text-base font-semibold">{title}</h1>
             </div>
+            <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'} title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}>
+              <Sun className="size-4" />
+            </Button>
             <Link to="/super-admin/login" className="text-sm text-muted-foreground hover:text-foreground">
               Account
             </Link>

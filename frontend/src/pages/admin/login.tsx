@@ -11,9 +11,12 @@ import { Input } from '../../components/ui/input'
 import { useAuth } from '../../hooks/use-auth'
 import { userMessage } from '../../lib/api'
 import { loginSchema, type LoginValues } from '../../lib/schemas'
+import { useAdminTheme } from '../../hooks/use-admin-theme'
+import { cn } from '../../lib/utils'
 
 export function AdminLoginPage() {
   const { loginAdmin } = useAuth()
+  const { isDark } = useAdminTheme()
   const navigate = useNavigate()
   const [showPassword, setShowPassword] = useState(false)
   const form = useForm<LoginValues>({
@@ -33,10 +36,10 @@ export function AdminLoginPage() {
   }
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-slate-100 px-4 py-10 dark:bg-slate-950">
-      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <div className={cn('flex min-h-dvh items-center justify-center px-4 py-10', isDark ? 'dark bg-[#07111f]' : 'bg-slate-100')}>
+      <div className={cn('w-full max-w-md rounded-2xl border p-6', isDark ? 'border-white/10 bg-white/5 text-white shadow-xl backdrop-blur' : 'border-slate-200 bg-white text-slate-900 shadow-sm')}>
         <div className="mb-6 flex items-center justify-center">
-          <Logo />
+          <Logo inverted={isDark} brandClassName={isDark ? 'text-3xl' : undefined} />
         </div>
 
         <div className="mb-6 text-center">

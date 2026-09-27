@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router-dom'
 import QRCode from 'qrcode'
 import { Logo } from '../../components/brand/logo'
@@ -14,8 +14,6 @@ export function TvDisplayPage() {
   const { data, error, loading } = useQueueSnapshot(identifier || undefined, 3000)
   const [now, setNow] = useState(() => new Date())
   const [qr, setQr] = useState('')
-  const [flash, setFlash] = useState(false)
-  const lastCalled = useRef<string | null>(null)
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow
@@ -58,23 +56,11 @@ export function TvDisplayPage() {
   const active = Boolean(serving || calling || next.length)
   const isCalling = Boolean(calling)
 
-  useEffect(() => {
-    const currentCallNumber = calling?.queueNumber ?? serving?.queueNumber
-    if (!currentCallNumber) return
-    if (lastCalled.current && lastCalled.current !== currentCallNumber) {
-      setFlash(true)
-      const timeout = window.setTimeout(() => setFlash(false), 1200)
-      lastCalled.current = currentCallNumber
-      return () => window.clearTimeout(timeout)
-    }
-    lastCalled.current = currentCallNumber
-  }, [calling?.queueNumber, serving?.queueNumber])
-
   return (
     <div className="flex min-h-dvh flex-col overflow-hidden px-8 py-6 lg:px-14 lg:py-8 [&::-webkit-scrollbar]:hidden">
       <header className="flex items-start justify-between gap-6">
         <div>
-          <Logo inverted size="lg" />
+          <Logo inverted size="lg" brandClassName="text-3xl lg:text-4xl" />
           <h1 className="mt-4 text-3xl font-semibold tracking-tight lg:text-5xl">{data?.clinic.name || identifier || 'Clinic Display'}</h1>
         </div>
         <div className="text-right">
@@ -96,11 +82,10 @@ export function TvDisplayPage() {
           <div className="grid gap-10 xl:grid-cols-[1.4fr_0.6fr] xl:items-center">
             <section
               className={cn(
-                'rounded-3xl border p-8 text-center transition-all duration-300',
+                'rounded-3xl border p-8 text-center',
                 isCalling
                   ? 'border-amber-300/70 bg-amber-400/10 shadow-[0_0_35px_rgba(251,191,36,0.35)]'
                   : 'border-white/10 bg-white/5',
-                flash && 'scale-[1.02] border-amber-200/80 bg-amber-300/10',
               )}
             >
               <div className="mb-3 flex items-center justify-center gap-2 text-sm font-medium tracking-[0.25em] uppercase text-sky-300">
@@ -141,7 +126,7 @@ export function TvDisplayPage() {
                     <li
                       key={item.id}
                       className={cn(
-                        'rounded-2xl px-5 py-4 font-mono text-3xl font-semibold tabular-nums lg:text-5xl transition-all',
+                        'rounded-2xl px-5 py-4 font-mono text-3xl font-semibold tabular-nums lg:text-5xl',
                         item.status === 'CALLED'
                           ? 'border border-amber-300/70 bg-amber-400/15 text-amber-100 shadow-[0_0_20px_rgba(252,211,77,0.25)]'
                           : 'bg-white/5 text-white',
