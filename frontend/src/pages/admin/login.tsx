@@ -33,65 +33,62 @@ export function AdminLoginPage() {
   }
 
   return (
-    <div className="grid min-h-dvh lg:grid-cols-2">
-      <aside className="relative hidden overflow-hidden bg-primary text-primary-foreground lg:flex lg:flex-col lg:justify-between p-10">
-        <Logo size="lg" inverted />
-        <div>
-          <h1 className="max-w-md text-4xl font-semibold tracking-tight">Smart queuing for school clinics.</h1>
-          <p className="mt-4 max-w-sm text-sm text-primary-foreground/75">
-            Call the next student, keep the waiting room calm, and give people a number they can trust.
+    <div className="flex min-h-dvh items-center justify-center bg-slate-100 px-4 py-10 dark:bg-slate-950">
+      <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div className="mb-6 flex items-center justify-center">
+          <Logo />
+        </div>
+
+        <div className="mb-6 text-center">
+          <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Queue-Nect</p>
+          <h1 className="mt-3 text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-50">
+            Clinic / Staff Sign in
+          </h1>
+          <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
+            Access your clinic queue and operations dashboard.
           </p>
         </div>
-        <p className="text-sm text-primary-foreground/60">QUEUE-NECT · Smart Queuing. Better Service.</p>
-      </aside>
-      <main className="flex items-center justify-center p-6">
-        <div className="w-full max-w-sm">
-          <div className="mb-8 lg:hidden">
-            <Logo />
+
+        <form className="space-y-4" onSubmit={form.handleSubmit(onSubmit)} noValidate>
+          <div>
+            <Label htmlFor="email">Email</Label>
+            <Input id="email" type="email" autoComplete="username" {...form.register('email')} />
+            <FieldError message={form.formState.errors.email?.message} />
           </div>
-          <h2 className="text-2xl font-semibold tracking-tight">Clinic / Staff Login</h2>
-          <p className="mt-1 text-sm text-muted-foreground">Sign in to manage your clinic queue.</p>
-          <form className="mt-6 space-y-4" onSubmit={form.handleSubmit(onSubmit)} noValidate>
-            <div>
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" type="email" autoComplete="username" {...form.register('email')} />
-              <FieldError message={form.formState.errors.email?.message} />
+          <div>
+            <Label htmlFor="password">Password</Label>
+            <div className="relative">
+              <Input
+                id="password"
+                type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
+                className="pr-11"
+                {...form.register('password')}
+              />
+              <button
+                type="button"
+                className="absolute top-1/2 right-2 -translate-y-1/2 rounded-md p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200"
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+                onClick={() => setShowPassword((value) => !value)}
+              >
+                {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+              </button>
             </div>
-            <div>
-              <Label htmlFor="password">Password</Label>
-              <div className="relative">
-                <Input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  autoComplete="current-password"
-                  className="pr-11"
-                  {...form.register('password')}
-                />
-                <button
-                  type="button"
-                  className="absolute top-1/2 right-2 -translate-y-1/2 rounded-md p-2 text-muted-foreground"
-                  aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  onClick={() => setShowPassword((value) => !value)}
-                >
-                  {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                </button>
-              </div>
-              <FieldError message={form.formState.errors.password?.message} />
-            </div>
-            <Button type="submit" className="w-full" loading={form.formState.isSubmitting}>
-              {form.formState.isSubmitting ? 'Logging in...' : 'Login'}
-            </Button>
-          </form>
-          <p className="mt-4 text-sm text-muted-foreground">
-            Forgot password is not available yet. Password reset requires email delivery.
-          </p>
-          <p className="mt-6 text-center text-sm text-muted-foreground">
-            <Link to="/" className="hover:text-foreground">
-              Back to Queue-Nect
-            </Link>
-          </p>
-        </div>
-      </main>
+            <FieldError message={form.formState.errors.password?.message} />
+          </div>
+
+          <Button type="submit" className="w-full" loading={form.formState.isSubmitting}>
+            {form.formState.isSubmitting ? 'Signing in...' : 'Sign in'}
+          </Button>
+        </form>
+
+        <p className="mt-5 text-center text-sm text-slate-600 dark:text-slate-400">
+          Need to return home?{' '}
+          <Link to="/" className="font-medium text-slate-900 hover:text-slate-700 dark:text-slate-200 dark:hover:text-white">
+            Back to home
+          </Link>
+        </p>
+      </div>
     </div>
   )
 }
