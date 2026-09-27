@@ -40,7 +40,7 @@ export function AdminLoginPage() {
         </div>
 
         <div className="mb-6 text-center">
-          <p className="text-xs font-medium uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">Queue-Nect</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-700 dark:text-slate-300">QUEUE-NECT</p>
           <h1 className="mt-3 text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-50">
             Clinic / Staff Sign in
           </h1>

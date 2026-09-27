@@ -111,7 +111,6 @@ export function TvDisplayPage() {
 
       <footer className="flex items-center justify-between gap-4 text-sm text-white/55">
         <p>{data?.clinic.announcement || 'Please listen for your queue number.'}</p>
-        <p>QUEUE-NECT</p>
       </footer>
     </div>
   )
