@@ -38,6 +38,13 @@ export function useStudentQueueRealtime(onChange: (reason?: QueueRealtimeReason)
     let channelStatus = 'CLOSED'
     let channelConnecting = false
     let hasSubscribed = false
+    let recoveryTimer: number | undefined
+    let channelGeneration = 0
+
+    const logRealtime = (message: string, detail?: unknown) => {
+      if (detail === undefined) console.debug(`[QUEUE REALTIME] ${message}`)
+      else console.debug(`[QUEUE REALTIME] ${message}`, detail)
+    }
 
     const updatePresence = async (next: Presence, heartbeat = false) => {
       if (disposed || next === presence && !heartbeat) return
@@ -58,6 +65,7 @@ export function useStudentQueueRealtime(onChange: (reason?: QueueRealtimeReason)
     }
     const subscribe = async (force = false) => {
       if (disposed || !tokenHash || channelConnecting || (!force && channelStatus === 'SUBSCRIBED')) return
+      logRealtime('subscribing', { force, tokenHash })
       const previousChannel = force ? channel : null
       if (force && channel) {
         channel = null
@@ -70,9 +78,12 @@ export function useStudentQueueRealtime(onChange: (reason?: QueueRealtimeReason)
         channelConnecting = false
         return
       }
+      const generation = ++channelGeneration
       channel = supabaseAnon
         .channel(`student-queue:${tokenHash}`, { config: { private: true } })
         .on('broadcast', { event: 'queue_status_changed' }, (message) => {
+          if (generation !== channelGeneration) return
+          logRealtime('event received', message)
           const payload = message?.payload as { status?: string } | undefined
           if (!payload || !['WAITING', 'CALLED', 'SERVING', 'AWAITING_RETURN', 'COMPLETED', 'CANCELLED', 'NO_SHOW'].includes(payload.status ?? '')) {
             console.warn('[Queue-Nect] Ignoring malformed student queue realtime event.', message)
@@ -81,16 +92,24 @@ export function useStudentQueueRealtime(onChange: (reason?: QueueRealtimeReason)
           callback.current('realtime')
         })
         .subscribe((status) => {
+          if (generation !== channelGeneration) return
           const wasSubscribed = hasSubscribed
           channelStatus = status
           channelConnecting = false
+          logRealtime('channel status', status)
           if (status === 'SUBSCRIBED') {
             hasSubscribed = true
+            logRealtime('SUBSCRIBED')
             if (wasSubscribed) callback.current('resume')
           }
           if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
             channelConnecting = false
             console.error('[Queue-Nect] Student queue realtime connection failed:', status)
+            logRealtime('reconnecting')
+            window.clearTimeout(recoveryTimer)
+            recoveryTimer = window.setTimeout(() => {
+              if (!disposed && document.visibilityState === 'visible' && navigator.onLine) void subscribe(true)
+            }, 250)
           }
         })
     }
@@ -183,7 +202,9 @@ export function useStudentQueueRealtime(onChange: (reason?: QueueRealtimeReason)
         window.removeEventListener(event, markActive)
       }
       window.clearTimeout(reconnectTimer)
+      window.clearTimeout(recoveryTimer)
       if (channel) void supabaseAnon.removeChannel(channel)
+      logRealtime('unsubscribed')
     }
   }, [enabled])
 }
