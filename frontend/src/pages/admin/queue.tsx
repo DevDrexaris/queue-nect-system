@@ -155,25 +155,35 @@ export function AdminQueuePage() {
         </CardHeader>
         <CardContent>
           {serving ? (
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div
+              className={[
+                'relative overflow-hidden rounded-xl border p-4 sm:p-5',
+                serving.status === 'CALLED'
+                  ? 'border-amber-400/60 bg-[radial-gradient(circle_at_top_left,_rgba(251,146,60,0.22),transparent_42%)] shadow-[0_0_0_1px_rgba(251,146,60,0.24),0_0_28px_rgba(251,146,60,0.16)] animate-pulse'
+                  : '',
+                serving.status === 'SERVING'
+                  ? 'border-emerald-400/60 bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.22),transparent_42%)] shadow-[0_0_0_1px_rgba(16,185,129,0.22),0_0_30px_rgba(16,185,129,0.18)]'
+                  : '',
+              ].join(' ')}
+            >
+              {serving.status === 'CALLED' ? (
+                <div className="pointer-events-none absolute left-4 top-4 z-10 inline-flex items-center gap-2 rounded-full border border-emerald-300/70 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-medium tracking-wide text-emerald-100 shadow-[0_0_18px_rgba(16,185,129,0.28)] backdrop-blur-sm animate-[queue-call-toast_220ms_ease-out]">
+                  <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(74,222,128,0.9)]" />
+                  Serve next number now
+                </div>
+              ) : null}
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <QueueNumber value={serving.queueNumber} size="lg" />
+                <QueueNumber
+                  value={serving.queueNumber}
+                  size="lg"
+                  className={serving.status === 'CALLED' ? 'text-amber-200 drop-shadow-[0_0_12px_rgba(251,146,60,0.45)]' : serving.status === 'SERVING' ? 'text-emerald-200 drop-shadow-[0_0_12px_rgba(16,185,129,0.45)]' : ''}
+                />
                 <p className="mt-2 font-medium">{serving.studentName}</p>
                 <p className="text-sm text-muted-foreground">{serving.purpose}</p>
                 <p className="mt-1 text-xs text-muted-foreground">Started: {formatTime(serving.calledAt)}</p>
               </div>
               <div className="flex flex-wrap gap-2">
-                {serving.status === 'CALLED' ? (
-                  <div className="mt-3 flex w-fit max-w-full flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-                    <span className="inline-flex items-center gap-2">
-                      <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-                      Serve next number now
-                    </span>
-                    <Button size="sm" className="shrink-0 bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => void serveNext()}>
-                      Serve now
-                    </Button>
-                  </div>
-                ) : null}
                 {serving.status === 'CALLED' ? (
                   <Button variant="outline" onClick={() => void run('recall', serving)}>
                     Stop calling
@@ -186,6 +196,7 @@ export function AdminQueuePage() {
                 <Button variant="ghost" onClick={() => void run('recall', serving)}>
                   Set waiting
                 </Button>
+              </div>
               </div>
             </div>
           ) : (
