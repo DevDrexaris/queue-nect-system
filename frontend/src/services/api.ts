@@ -26,17 +26,36 @@ function mapRole(value: string | null | undefined): UserRole {
 }
 
 function safeSessionUser(profile: any, user?: any): SessionUser {
+  const org = profile?.organizations ?? null
+  const clinic = profile?.organization_id && org
+    ? {
+        id: profile.organization_id,
+        identifier: org.public_identifier ?? '',
+        name: org.name ?? 'Clinic',
+        schoolName: org.name ?? 'Clinic',
+        address: org.address ?? '',
+        contact: org.contact_information ?? '',
+        queuePrefix: org.queue_prefix ?? 'A',
+        announcement: '',
+      }
+    : undefined
+
   return {
     id: profile?.id ?? user?.id ?? 'unknown',
     name: profile?.full_name ?? user?.email?.split('@')[0] ?? 'User',
     email: profile?.email ?? user?.email ?? '',
     role: mapRole(profile?.role ?? user?.role ?? 'STAFF'),
-    clinic: undefined,
+    clinic,
   }
 }
 
 async function getProfileByUserId(userId: string) {
-  const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle()
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*, organizations!organization_id(name, public_identifier, queue_prefix, address, contact_information, is_active)')
+    .eq('id', userId)
+    .maybeSingle()
+
   if (error) throw error
   return data
 }
@@ -518,18 +537,26 @@ export const analyticsService = {
 
 export const adminUsersService = {
   list: async (): Promise<{ users: AdminAccount[] }> => {
-    const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false })
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*, organizations!organization_id(name, public_identifier)')
+      .order('created_at', { ascending: false })
+
     if (error) throw error
 
-    const users: AdminAccount[] = (data ?? []).map((profile) => ({
-      id: profile.id,
-      name: profile.full_name,
-      email: profile.email,
-      role: mapRole(profile.role),
-      organizationId: profile.organization_id ?? undefined,
-      clinicName: undefined,
-      status: profile.is_active ? 'active' : 'disabled',
-    }))
+    const users: AdminAccount[] = (data ?? []).map((profile) => {
+      const org = Array.isArray(profile.organizations) ? profile.organizations[0] : profile.organizations
+
+      return {
+        id: profile.id,
+        name: profile.full_name,
+        email: profile.email,
+        role: mapRole(profile.role),
+        organizationId: profile.organization_id ?? undefined,
+        clinicName: org?.name ?? undefined,
+        status: profile.is_active ? 'active' : 'disabled',
+      }
+    })
 
     return { users }
   },

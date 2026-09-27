@@ -21,7 +21,7 @@ export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
 export async function getProfileRole(profileId: string) {
   const { data, error } = await supabase
     .from('profiles')
-    .select('id, role, full_name, email, organization_id, is_active')
+    .select('id, role, full_name, email, organization_id, is_active, organizations!organization_id(name, public_identifier, queue_prefix, address, contact_information, is_active)')
     .eq('id', profileId)
     .maybeSingle()
 
