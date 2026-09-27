@@ -959,21 +959,98 @@ export const historyService = {
 }
 
 export const analyticsService = {
-  summary: async (_range: string) => {
-    const { data, error } = await supabase.from('queue_entries').select('*')
+  summary: async (range: string, clinicIdentifier?: string) => {
+    let query = supabase.from('queue_entries').select('*')
+
+    if (clinicIdentifier) {
+      const { data: org, error: orgError } = await getOrgIdFromClinicIdentifier(clinicIdentifier)
+      if (orgError) throw orgError
+      if (!org) throw new Error('Clinic not found.')
+      query = query.eq('organization_id', org.id)
+    }
+
+    const { data, error } = await query
     if (error) throw error
 
-    const entries = data ?? []
+    const entries = (data ?? []).filter((entry) => {
+      if (!entry.joined_at) return false
+      const time = new Date(entry.joined_at).getTime()
+      const now = Date.now()
+      const dayMs = 24 * 60 * 60 * 1000
+
+      if (range === 'today') {
+        return time >= new Date(now).setHours(0, 0, 0, 0)
+      }
+      if (range === 'week') {
+        return time >= now - 7 * dayMs
+      }
+      return time >= now - 30 * dayMs
+    })
+
+    const toMinutes = (from?: string | null, to?: string | null) => {
+      if (!from || !to) return null
+      const diff = new Date(to).getTime() - new Date(from).getTime()
+      if (Number.isNaN(diff) || diff < 0) return null
+      return Math.round(diff / 60000)
+    }
+
+    const waitValues = entries
+      .map((entry) => toMinutes(entry.joined_at, entry.called_at ?? entry.started_at ?? entry.completed_at))
+      .filter((value): value is number => typeof value === 'number')
+
+    const serviceValues = entries
+      .map((entry) => toMinutes(entry.started_at, entry.completed_at))
+      .filter((value): value is number => typeof value === 'number')
+
+    const hourlyBuckets = Array.from({ length: 6 }, (_, index) => ({
+      label: `${index * 4}:00`,
+      value: 0,
+    }))
+
+    entries.forEach((entry) => {
+      if (!entry.joined_at) return
+      const date = new Date(entry.joined_at)
+      const hourBucket = Math.min(5, Math.floor(date.getHours() / 4))
+      hourlyBuckets[hourBucket].value += 1
+    })
+
+    const dailyLabels = Array.from({ length: range === 'today' ? 6 : range === 'week' ? 7 : 6 }, (_, index) => {
+      const date = new Date()
+      date.setHours(0, 0, 0, 0)
+      date.setDate(date.getDate() - (range === 'week' ? 6 - index : 5 - index))
+      return date.toLocaleDateString([], { month: 'short', day: 'numeric' })
+    })
+
+    const dailyBuckets = dailyLabels.map((label) => ({ label, value: 0 }))
+    entries.forEach((entry) => {
+      if (!entry.joined_at) return
+      const date = new Date(entry.joined_at)
+      const key = date.toLocaleDateString([], { month: 'short', day: 'numeric' })
+      const bucket = dailyBuckets.findIndex((item) => item.label === key)
+      if (bucket >= 0) dailyBuckets[bucket].value += 1
+    })
+
+    const purposeBuckets = new Map<string, number>()
+    entries.forEach((entry) => {
+      const key = entry.purpose || 'General'
+      purposeBuckets.set(key, (purposeBuckets.get(key) ?? 0) + 1)
+    })
+
+    const purposes = Array.from(purposeBuckets.entries())
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 6)
+
     return {
       total: entries.length,
       completed: entries.filter((entry) => entry.status === 'COMPLETED').length,
       cancelled: entries.filter((entry) => entry.status === 'CANCELLED').length,
       noShow: entries.filter((entry) => entry.status === 'NO_SHOW').length,
-      averageWaitMinutes: null,
-      averageServiceMinutes: null,
-      hourly: [],
-      daily: [],
-      purposes: [],
+      averageWaitMinutes: waitValues.length > 0 ? Math.round(waitValues.reduce((sum, value) => sum + value, 0) / waitValues.length) : null,
+      averageServiceMinutes: serviceValues.length > 0 ? Math.round(serviceValues.reduce((sum, value) => sum + value, 0) / serviceValues.length) : null,
+      hourly: hourlyBuckets,
+      daily: dailyBuckets,
+      purposes,
     }
   },
 }

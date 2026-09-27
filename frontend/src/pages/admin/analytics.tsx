@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
 import { PageHeader } from '../../components/ui/page-header'
 import { SimpleBarChart } from '../../components/ui/simple-bar-chart'
 import { StatCard } from '../../components/ui/stat-card'
 import { ErrorState, LoadingState } from '../../components/ui/states'
 import { Button } from '../../components/ui/button'
+import { useAuth } from '../../hooks/use-auth'
+import { usePolling } from '../../hooks/use-polling'
 import { analyticsService } from '../../services/api'
 import { userMessage } from '../../lib/api'
 import { formatWait } from '../../lib/format'
@@ -30,15 +32,24 @@ type Analytics = {
 }
 
 export function AdminAnalyticsPage() {
+  const { user } = useAuth()
+  const clinicId = user?.clinic?.identifier
   const [range, setRange] = useState<Range>('today')
   const [data, setData] = useState<Analytics | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
-  async function load() {
+  const load = useCallback(async () => {
+    if (!clinicId) {
+      setData(null)
+      setError('Clinic information is unavailable. Please sign in again.')
+      setLoading(false)
+      return
+    }
+
     setLoading(true)
     try {
-      const summary = await analyticsService.summary(range)
+      const summary = await analyticsService.summary(range, clinicId)
       setData(summary)
       setError(null)
     } catch (caught) {
@@ -47,11 +58,15 @@ export function AdminAnalyticsPage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [clinicId, range])
 
   useEffect(() => {
     void load()
-  }, [range])
+  }, [load])
+
+  usePolling(() => {
+    void load()
+  }, 5000, Boolean(clinicId))
 
   return (
     <div>
