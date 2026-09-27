@@ -231,6 +231,18 @@ on public.organization_qr_tokens
 for select
 using (is_active = true);
 
+create policy "Public can create QR access tokens for active organizations"
+on public.organization_qr_tokens
+for insert
+with check (
+  exists (
+    select 1
+    from public.organizations o
+    where o.id = organization_id
+      and o.is_active = true
+  )
+);
+
 create policy "Admins can manage QR access tokens for their org"
 on public.organization_qr_tokens
 for all
