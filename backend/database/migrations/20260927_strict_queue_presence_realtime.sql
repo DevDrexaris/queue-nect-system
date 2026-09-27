@@ -114,9 +114,10 @@ begin
   end if;
 
   if not (
-    (old.status = 'WAITING' and new.status in ('CALLED', 'CANCELLED', 'NO_SHOW'))
-    or (old.status = 'CALLED' and new.status in ('SERVING', 'WAITING', 'CANCELLED', 'NO_SHOW'))
-    or (old.status = 'SERVING' and new.status in ('COMPLETED', 'CANCELLED'))
+    (old.status = 'WAITING' and new.status in ('CALLED', 'AWAITING_RETURN', 'CANCELLED', 'NO_SHOW'))
+    or (old.status = 'CALLED' and new.status in ('SERVING', 'AWAITING_RETURN', 'WAITING', 'CANCELLED', 'NO_SHOW'))
+    or (old.status = 'AWAITING_RETURN' and new.status in ('CALLED', 'WAITING', 'CANCELLED', 'NO_SHOW'))
+    or (old.status = 'SERVING' and new.status in ('AWAITING_RETURN', 'COMPLETED', 'CANCELLED'))
   ) then
     raise exception 'Invalid queue transition: % -> %', old.status, new.status;
   end if;
@@ -548,6 +549,10 @@ begin
     update public.queue_entries set status = 'CALLED' where id = v_entry.id returning * into v_entry;
   elsif p_action = 'return_to_waiting' and v_entry.status = 'CALLED' then
     update public.queue_entries set status = 'WAITING', called_at = null where id = v_entry.id returning * into v_entry;
+  elsif p_action = 'awaiting_return' and v_entry.status in ('SERVING', 'CALLED') then
+    update public.queue_entries set status = 'AWAITING_RETURN' where id = v_entry.id returning * into v_entry;
+  elsif p_action = 'call_again' and v_entry.status = 'AWAITING_RETURN' then
+    update public.queue_entries set status = 'CALLED', called_at = now() where id = v_entry.id returning * into v_entry;
   elsif p_action = 'serve' and v_entry.status = 'CALLED' then
     if exists (select 1 from public.queue_entries q where q.organization_id = v_entry.organization_id and q.status = 'SERVING' and q.id <> v_entry.id) then
       raise exception 'Another number is already being served';
@@ -555,9 +560,9 @@ begin
     update public.queue_entries set status = 'SERVING' where id = v_entry.id returning * into v_entry;
   elsif p_action = 'complete' and v_entry.status = 'SERVING' then
     update public.queue_entries set status = 'COMPLETED' where id = v_entry.id returning * into v_entry;
-  elsif p_action = 'skip' and v_entry.status in ('WAITING', 'CALLED') then
+  elsif p_action = 'skip' and v_entry.status in ('WAITING', 'CALLED', 'AWAITING_RETURN') then
     update public.queue_entries set status = 'NO_SHOW' where id = v_entry.id returning * into v_entry;
-  elsif p_action = 'cancel' and v_entry.status in ('WAITING', 'CALLED', 'SERVING') then
+  elsif p_action = 'cancel' and v_entry.status in ('WAITING', 'CALLED', 'SERVING', 'AWAITING_RETURN') then
     update public.queue_entries
     set status = 'CANCELLED', cancellation_source = 'ADMIN'
     where id = v_entry.id returning * into v_entry;
@@ -587,16 +592,23 @@ begin
   from public.queue_sessions
   where organization_id = p_organization_id and session_date = current_date and is_active = true
   for update;
-  if not found then raise exception 'There is no active queue session to reset'; end if;
-  if exists (select 1 from public.queue_entries where queue_session_id = v_session.id and status = 'SERVING') then
-    raise exception 'Finish service before resetting the queue';
+
+  if not found then
+    insert into public.queue_sessions (organization_id, session_date, queue_prefix, next_number, is_active)
+    values (p_organization_id, current_date, 'A', 1, true)
+    returning * into v_session;
   end if;
 
-  update public.queue_entries
-  set status = 'CANCELLED', cancellation_source = 'ADMIN'
-  where queue_session_id = v_session.id and status in ('WAITING', 'CALLED');
-  get diagnostics v_count = row_count;
-  return v_count;
+  if exists (select 1 from public.queue_entries where queue_session_id = v_session.id and status in ('WAITING', 'CALLED', 'SERVING', 'AWAITING_RETURN')) then
+    raise exception 'Queue cannot be reset while active customers are still in the queue.';
+  end if;
+
+  update public.queue_sessions
+  set next_number = 1,
+      updated_at = now()
+  where id = v_session.id;
+
+  return 1;
 end;
 $$;
 

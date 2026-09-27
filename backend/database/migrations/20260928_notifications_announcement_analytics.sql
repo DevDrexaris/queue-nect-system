@@ -202,9 +202,10 @@ begin
     raise exception 'Terminal queue states cannot be reopened';
   end if;
   if not (
-    (old.status = 'WAITING' and new.status in ('CALLED', 'CANCELLED', 'NO_SHOW'))
-    or (old.status = 'CALLED' and new.status in ('SERVING', 'WAITING', 'CANCELLED', 'NO_SHOW'))
-    or (old.status = 'SERVING' and new.status in ('COMPLETED', 'CANCELLED'))
+    (old.status = 'WAITING' and new.status in ('CALLED', 'AWAITING_RETURN', 'CANCELLED', 'NO_SHOW'))
+    or (old.status = 'CALLED' and new.status in ('SERVING', 'AWAITING_RETURN', 'WAITING', 'CANCELLED', 'NO_SHOW'))
+    or (old.status = 'AWAITING_RETURN' and new.status in ('CALLED', 'WAITING', 'CANCELLED', 'NO_SHOW'))
+    or (old.status = 'SERVING' and new.status in ('AWAITING_RETURN', 'COMPLETED', 'CANCELLED'))
   ) then
     raise exception 'Invalid queue transition: % -> %', old.status, new.status;
   end if;

@@ -21,6 +21,7 @@ import type { QueueEntry, QueueSnapshot } from '../../types'
 function headline(entry: QueueEntry) {
   if (entry.status === 'CALLED') return 'Your number is next. Please proceed to the clinic.'
   if (entry.status === 'SERVING') return 'You are currently being served.'
+  if (entry.status === 'AWAITING_RETURN') return 'You are awaiting return. Please stay available for the next call.'
   if (entry.status === 'SERVED' || entry.status === 'COMPLETED') return 'Queue completed.'
   if (entry.status === 'CANCELLED') return entry.cancellationSource === 'ADMIN'
     ? 'Your queue has been cancelled by staff.'
@@ -105,7 +106,7 @@ export function QueueStatusPage() {
     const initialLoad = window.setTimeout(() => void load(), 0)
     return () => window.clearTimeout(initialLoad)
   }, [load])
-  useStudentQueueRealtime(load, Boolean(entry && ['WAITING', 'CALLED', 'SERVING'].includes(entry.status)))
+  useStudentQueueRealtime(load, Boolean(entry && ['WAITING', 'CALLED', 'SERVING', 'AWAITING_RETURN'].includes(entry.status)))
 
   async function enableNotifications() {
     if (!('Notification' in window)) {

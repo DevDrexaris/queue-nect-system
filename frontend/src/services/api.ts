@@ -424,9 +424,10 @@ export const queueService = {
     const activeServing = mapped.find((entry) => entry.status === 'SERVING') ?? null
     const activeCalled = activeServing ? null : mapped.find((entry) => entry.status === 'CALLED') ?? null
     const nowServing = activeServing ?? activeCalled ?? null
-    const upNext = mapped.filter((entry) => entry.status === 'WAITING').slice(0, 5)
+    const upNext = mapped.filter((entry) => entry.status === 'WAITING' || entry.status === 'AWAITING_RETURN').slice(0, 5)
     const waitingCount = mapped.filter((entry) => entry.status === 'WAITING').length
     const servingCount = mapped.filter((entry) => entry.status === 'SERVING').length
+    const awaitingReturnCount = mapped.filter((entry) => entry.status === 'AWAITING_RETURN').length
     const completedCount = mapped.filter((entry) => entry.status === 'COMPLETED').length
 
     return {
@@ -451,6 +452,7 @@ export const queueService = {
       upNext,
       waitingCount,
       servingCount,
+      awaitingReturnCount,
       completedCount,
       todayCount: mapped.length,
       entries: mapped,
@@ -596,10 +598,11 @@ export const queueService = {
     return { queueSessionId: session.id, queuePrefix: org.queue_prefix, cancelledEntries: data }
   },
 
-  updateStatus: async (queueId: string, action: 'call' | 'serve' | 'complete' | 'skip' | 'cancel' | 'return_to_waiting') => {
+  updateStatus: async (queueId: string, action: 'call' | 'serve' | 'complete' | 'skip' | 'cancel' | 'return_to_waiting' | 'awaiting_return' | 'call_again') => {
+    const normalizedAction = action === 'call_again' ? 'call' : action
     const { data, error } = await supabase.rpc('transition_queue_entry', {
       p_queue_entry_id: queueId,
-      p_action: action,
+      p_action: normalizedAction,
     })
     if (error) throw error
 

@@ -98,7 +98,7 @@ export function AdminQueuePage() {
     setResetting(true)
     try {
       await queueService.resetQueue(clinicId)
-      toast.success('Active entries cancelled; queue numbers remain reserved.')
+      toast.success('Queue number reset to A001 for this session.')
       setResetPending(false)
       setResetConfirmed(false)
       await reload()
@@ -152,8 +152,8 @@ export function AdminQueuePage() {
                 </div>
               ) : null}
             </div>
-            <Button size="sm" variant="destructive" onClick={() => setResetPending(true)} loading={resetting}>
-              {resetting ? 'Cancelling...' : 'Cancel active'}
+            <Button size="sm" variant="outline" onClick={() => setResetPending(true)} loading={resetting}>
+              {resetting ? 'Resetting...' : 'Reset Queue Number'}
             </Button>
           </div>
         }
@@ -315,19 +315,19 @@ export function AdminQueuePage() {
           setResetPending(false)
           setResetConfirmed(false)
         }}
-        title="Cancel all active entries?"
-        description="Waiting and called entries will be cancelled and retained in queue history. Queue numbers will not be reused. New students may still join this session."
+        title="Reset queue number?"
+        description="This will reset the next queue number to A001 for this session. Existing queue history will remain unchanged."
         footer={
           <>
             <Button variant="outline" onClick={() => { setResetPending(false); setResetConfirmed(false) }}>
               Cancel
             </Button>
             <Button
-              variant="destructive"
+              variant="default"
               disabled={!resetConfirmed || resetting}
               onClick={() => void resetQueue()}
             >
-              {resetting ? 'Cancelling...' : 'Cancel active entries'}
+              {resetting ? 'Resetting...' : 'Reset Queue'}
             </Button>
           </>
         }
@@ -340,7 +340,7 @@ export function AdminQueuePage() {
             className="mt-1 size-4"
           />
           <span>
-            I understand active entries will be cancelled and queue numbers will remain reserved.
+            I understand this only resets the current session number sequence; it does not delete history or analytics.
           </span>
         </label>
       </Dialog>

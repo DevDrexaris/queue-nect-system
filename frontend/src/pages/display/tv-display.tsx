@@ -109,6 +109,7 @@ export function TvDisplayPage() {
       serviceArea: clinic.announcementServiceArea || 'the service desk',
       useCustom: clinic.announcementUseCustom ?? false,
       template: clinic.announcementTemplate || 'Queue {queue_number}, please proceed to {service_area}.',
+      speech: true,
     }))
     utterance.rate = clinic.announcementRate ?? 0.95
     utterance.volume = clinic.announcementVolume ?? 1

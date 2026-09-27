@@ -23,18 +23,34 @@ export function buildQueueAnnouncement({
   serviceArea,
   useCustom,
   template,
+  speech = false,
 }: {
   queueNumber: string
   organizationName: string
   serviceArea: string
   useCustom: boolean
   template: string
+  speech?: boolean
 }) {
-  if (!useCustom) {
-    return `Queue number ${queueNumberForSpeech(queueNumber)}, please proceed to ${serviceArea}.`
-  }
-  return template
-    .replaceAll('{queue_number}', queueNumberForSpeech(queueNumber))
-    .replaceAll('{organization_name}', organizationName)
-    .replaceAll('{service_area}', serviceArea)
+  const resolvedQueue = queueNumber?.trim() || ''
+  const resolvedServiceArea = serviceArea?.trim() || 'the service desk'
+  const resolvedOrganization = organizationName?.trim() || 'the clinic'
+  const spokenQueue = resolvedQueue ? queueNumberForSpeech(resolvedQueue) : ''
+  const displayQueue = resolvedQueue || 'Queue'
+
+  const templateText = useCustom && template?.trim()
+    ? template.trim()
+    : 'Queue {queue_number}, please proceed to {service_area}.'
+
+  const rendered = templateText
+    .replaceAll('{queue_number}', speech ? spokenQueue : displayQueue)
+    .replaceAll('{organization_name}', resolvedOrganization)
+    .replaceAll('{service_area}', resolvedServiceArea)
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\s+\./g, '.')
+    .replace(/\s+,/g, ',')
+    .replace(/\s+$/g, '')
+
+  if (!resolvedQueue) return ''
+  return rendered
 }

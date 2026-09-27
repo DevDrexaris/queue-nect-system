@@ -2,6 +2,7 @@ export const QUEUE_STATUSES = [
   'WAITING',
   'CALLED',
   'SERVING',
+  'AWAITING_RETURN',
   'COMPLETED',
   'SERVED',
   'CANCELLED',
@@ -15,6 +16,7 @@ export function formatQueueStatusLabel(status: QueueStatus) {
     WAITING: 'Waiting',
     CALLED: 'Called',
     SERVING: 'Currently serving',
+    AWAITING_RETURN: 'Awaiting return',
     COMPLETED: 'Served',
     SERVED: 'Served',
     CANCELLED: 'Cancelled',
@@ -85,6 +87,7 @@ export type QueueSnapshot = {
   upNext: QueueEntry[]
   waitingCount: number
   servingCount: number
+  awaitingReturnCount?: number
   completedCount: number
   todayCount: number
   entries: QueueEntry[]

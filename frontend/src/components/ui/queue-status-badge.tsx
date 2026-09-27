@@ -21,6 +21,11 @@ const config: Record<
     className: 'border border-status-serving/20 bg-status-serving/10 text-status-serving',
     icon: LoaderCircle,
   },
+  AWAITING_RETURN: {
+    label: 'Awaiting return',
+    className: 'border border-amber-500/20 bg-amber-500/10 text-amber-500',
+    icon: Bell,
+  },
   COMPLETED: {
     label: 'Served',
     className: 'border border-border bg-muted text-status-completed',

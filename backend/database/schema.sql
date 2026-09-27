@@ -4,7 +4,7 @@
 create extension if not exists pgcrypto;
 
 create type public.user_role as enum ('ADMIN', 'ORG_ADMIN', 'STAFF', 'SUPER_ADMIN');
-create type public.queue_status as enum ('WAITING', 'CALLED', 'SERVING', 'COMPLETED', 'CANCELLED', 'NO_SHOW');
+create type public.queue_status as enum ('WAITING', 'CALLED', 'SERVING', 'AWAITING_RETURN', 'COMPLETED', 'CANCELLED', 'NO_SHOW');
 create type public.organization_status as enum ('active', 'disabled');
 
 create table if not exists public.organizations (
@@ -454,7 +454,7 @@ select
   q.updated_at
 from public.queue_entries q
 join public.organizations o on o.id = q.organization_id
-where q.status in ('WAITING', 'CALLED', 'SERVING')
+where q.status in ('WAITING', 'CALLED', 'SERVING', 'AWAITING_RETURN')
   and o.is_active = true;
 
 create index if not exists public_queue_snapshot_org_status_idx
