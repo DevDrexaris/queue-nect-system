@@ -74,6 +74,30 @@
   }
 }
 
+@keyframes queue-card-glow-amber {
+  0%,
+  100% {
+    border-color: rgba(251, 146, 60, 0.75);
+    box-shadow: 0 0 0 1px rgba(251, 146, 60, 0.32), 0 0 16px rgba(251, 146, 60, 0.12);
+  }
+  50% {
+    border-color: rgba(251, 191, 36, 0.92);
+    box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.38), 0 0 24px rgba(251, 146, 60, 0.2);
+  }
+}
+
+@keyframes queue-card-glow-emerald {
+  0%,
+  100% {
+    border-color: rgba(16, 185, 129, 0.75);
+    box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.2), 0 0 18px rgba(16, 185, 129, 0.12);
+  }
+  50% {
+    border-color: rgba(52, 211, 153, 0.95);
+    box-shadow: 0 0 0 1px rgba(16, 185, 129, 0.3), 0 0 26px rgba(16, 185, 129, 0.18);
+  }
+}
+
 @layer base {
   * {
     border-color: var(--qn-border);
