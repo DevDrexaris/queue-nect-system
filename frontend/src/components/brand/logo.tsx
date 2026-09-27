@@ -15,12 +15,12 @@ type BrandProps = {
   inverted?: boolean
 }
 
-export function BrandMark({ className, size = 'md', inverted = false }: BrandProps) {
+export function BrandMark({ className, size = 'md' }: BrandProps) {
   return (
     <span
       className={cn(
-        'inline-flex items-center justify-center rounded-lg ring-1 shadow-sm',
-        inverted ? 'bg-white text-slate-900 ring-slate-200' : 'bg-slate-900 text-white ring-slate-200',
+        'inline-flex items-center justify-center rounded-lg',
+        'bg-transparent shadow-none ring-0',
         sizes[size].mark,
         className,
       )}
