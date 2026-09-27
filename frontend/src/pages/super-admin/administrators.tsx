@@ -26,6 +26,7 @@ export function SuperAdminAdministratorsPage() {
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [editingUser, setEditingUser] = useState<AdminAccount | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<AdminAccount | null>(null)
   const form = useForm<Values>({
     resolver: zodResolver(createAdminSchema),
     defaultValues: { role: 'ADMIN', name: '', email: '', temporaryPassword: '', organizationId: '' },
@@ -91,6 +92,19 @@ export function SuperAdminAdministratorsPage() {
     }
   }
 
+  async function handleDeleteConfirm() {
+    if (!deleteTarget) return
+
+    try {
+      await superAdminService.deleteAdmin(deleteTarget.id)
+      toast.success(`Administrator ${deleteTarget.name} removed.`)
+      setDeleteTarget(null)
+      await load()
+    } catch (caught) {
+      toast.error(userMessage(caught))
+    }
+  }
+
   return (
     <div>
       <PageHeader title="Administrators" actions={<Button onClick={openCreate}>Create admin</Button>} />
@@ -123,15 +137,41 @@ export function SuperAdminAdministratorsPage() {
                   <Badge variant={item.status === 'active' ? 'success' : 'outline'}>{item.status}</Badge>
                 </TD>
                 <TD>
-                  <Button variant="outline" size="sm" onClick={() => openEdit(item)}>
-                    Edit
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => openEdit(item)}>
+                      Edit
+                    </Button>
+                    <Button variant="destructive" size="sm" onClick={() => setDeleteTarget(item)}>
+                      Delete
+                    </Button>
+                  </div>
                 </TD>
               </TR>
             ))}
           </TBody>
         </Table>
       )}
+
+      <Dialog
+        open={Boolean(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+        title="Delete administrator"
+        description={`This will remove ${deleteTarget?.name ?? 'this administrator'} from the system. This action cannot be undone.`}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteConfirm}>
+              Delete admin
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-muted-foreground">
+          Delete the admin account for <span className="font-medium text-foreground">{deleteTarget?.email}</span>?
+        </p>
+      </Dialog>
 
       <Dialog
         open={open}

@@ -684,4 +684,12 @@ export const superAdminService = {
       status: data.is_active ? 'active' : 'disabled',
     }
   },
+  deleteAdmin: async (id: string) => {
+    const { error } = await supabase.from('profiles').delete().eq('id', id)
+    if (error) throw error
+  },
+  deleteOrganization: async (id: string) => {
+    const { error } = await supabase.from('organizations').delete().eq('id', id)
+    if (error) throw error
+  },
 }

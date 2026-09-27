@@ -25,6 +25,7 @@ export function SuperAdminOrganizationsPage() {
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [editingOrg, setEditingOrg] = useState<Organization | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<Organization | null>(null)
   const form = useForm<Values>({ resolver: zodResolver(organizationSchema) })
 
   async function load() {
@@ -94,6 +95,19 @@ export function SuperAdminOrganizationsPage() {
     }
   }
 
+  async function handleDeleteConfirm() {
+    if (!deleteTarget) return
+
+    try {
+      await superAdminService.deleteOrganization(deleteTarget.id)
+      toast.success(`Organization ${deleteTarget.schoolName} removed.`)
+      setDeleteTarget(null)
+      await load()
+    } catch (caught) {
+      toast.error(userMessage(caught))
+    }
+  }
+
   return (
     <div>
       <PageHeader
@@ -131,15 +145,41 @@ export function SuperAdminOrganizationsPage() {
                 </TD>
                 <TD>{formatDate(item.createdAt)}</TD>
                 <TD>
-                  <Button variant="outline" size="sm" onClick={() => openEdit(item)}>
-                    Edit
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button variant="outline" size="sm" onClick={() => openEdit(item)}>
+                      Edit
+                    </Button>
+                    <Button variant="destructive" size="sm" onClick={() => setDeleteTarget(item)}>
+                      Delete
+                    </Button>
+                  </div>
                 </TD>
               </TR>
             ))}
           </TBody>
         </Table>
       )}
+
+      <Dialog
+        open={Boolean(deleteTarget)}
+        onClose={() => setDeleteTarget(null)}
+        title="Delete organization"
+        description={`This will permanently remove ${deleteTarget?.schoolName ?? 'this organization'} and its associated clinic data. This action cannot be undone.`}
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteConfirm}>
+              Delete organization
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-muted-foreground">
+          Confirm deleting <span className="font-medium text-foreground">{deleteTarget?.clinicName}</span> and all of its queued clinic data.
+        </p>
+      </Dialog>
 
       <Dialog
         open={open}
