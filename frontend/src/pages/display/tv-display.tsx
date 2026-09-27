@@ -62,7 +62,7 @@ export function TvDisplayPage() {
   }, [calling?.queueNumber, serving?.queueNumber])
 
   return (
-    <div className="flex min-h-dvh flex-col px-8 py-6 lg:px-14 lg:py-8">
+    <div className="flex min-h-dvh flex-col overflow-hidden px-8 py-6 lg:px-14 lg:py-8 [&::-webkit-scrollbar]:hidden">
       <header className="flex items-start justify-between gap-6">
         <div>
           <Logo inverted size="lg" />
