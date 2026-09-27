@@ -39,7 +39,7 @@ export function SuperAdminLoginPage() {
     <div className={cn('flex min-h-dvh items-center justify-center px-4 py-10', isDark ? 'dark bg-[#07111f]' : 'bg-slate-100')}>
       <div className={cn('w-full max-w-md rounded-2xl border p-6', isDark ? 'border-white/10 bg-white/5 text-white shadow-xl backdrop-blur' : 'border-slate-200 bg-white text-slate-900 shadow-sm')}>
         <div className="mb-6 flex items-center justify-center">
-          <Logo inverted={isDark} brandClassName={isDark ? 'text-3xl' : undefined} />
+          <Logo inverted={isDark} />
         </div>
 
         <div className="mb-6 text-center">

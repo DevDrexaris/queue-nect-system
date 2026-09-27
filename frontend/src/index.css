@@ -1,8 +1,17 @@
 @import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@font-face {
+  font-family: 'Eternalo';
+  src: url('./assets/Eternalo.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --font-sans: "Eternalo", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Eternalo", ui-sans-serif, system-ui, sans-serif;
 
   --color-background: var(--qn-bg);
   --color-foreground: var(--qn-fg);
