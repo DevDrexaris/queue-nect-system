@@ -1,5 +1,4 @@
-import { getQueueJoinUrl } from '../lib/env'
-import { supabase, supabaseAnon } from '../lib/supabase'
+import { supabase } from '../lib/supabase'
 import type {
   AdminAccount,
   Clinic,
@@ -27,84 +26,23 @@ function mapRole(value: string | null | undefined): UserRole {
 }
 
 function safeSessionUser(profile: any, user?: any): SessionUser {
-  const org = profile?.organizations ?? null
-  const clinic = profile?.organization_id && org
-    ? {
-        id: profile.organization_id,
-        identifier: org.public_identifier ?? '',
-        name: org.name ?? 'Clinic',
-        schoolName: org.name ?? 'Clinic',
-        address: org.address ?? '',
-        contact: org.contact_information ?? '',
-        queuePrefix: org.queue_prefix ?? 'A',
-        announcement: '',
-      }
-    : undefined
-
   return {
     id: profile?.id ?? user?.id ?? 'unknown',
     name: profile?.full_name ?? user?.email?.split('@')[0] ?? 'User',
     email: profile?.email ?? user?.email ?? '',
     role: mapRole(profile?.role ?? user?.role ?? 'STAFF'),
-    clinic,
+    clinic: undefined,
   }
 }
 
 async function getProfileByUserId(userId: string) {
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*, organizations!organization_id(name, public_identifier, queue_prefix, address, contact_information, is_active)')
-    .eq('id', userId)
-    .maybeSingle()
-
+  const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle()
   if (error) throw error
   return data
 }
 
-function generateSecureQrToken(length = 32) {
-  const bytes = new Uint8Array(length)
-  crypto.getRandomValues(bytes)
-  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('').slice(0, length)
-}
-
-async function getQueueClient() {
-  const { data: { session } } = await supabase.auth.getSession()
-  return session ? supabase : supabaseAnon
-}
-
-function isRlsPermissionError(error: any) {
-  const message = error?.message ?? ''
-  return /permission denied|row level security|policy|42501/i.test(message)
-}
-
-async function withPublicFallback<T>(
-  publicCall: () => Promise<{ data: T | null; error: any }>,
-  staffCall?: () => Promise<{ data: T | null; error: any }>
-): Promise<{ data: T | null; error: any }> {
-  const publicResult = await publicCall()
-  if (!publicResult.error || !isRlsPermissionError(publicResult.error)) {
-    return publicResult
-  }
-
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session || !staffCall) {
-    return publicResult
-  }
-
-  return await staffCall()
-}
-
-async function getOrgIdFromClinicIdentifier(clinicIdentifier: string) {
-  const publicQuery = async () => {
-    const result = await supabaseAnon.from('organizations').select('*').eq('public_identifier', clinicIdentifier).maybeSingle()
-    return result
-  }
-  const staffQuery = async () => {
-    const result = await supabase.from('organizations').select('*').eq('public_identifier', clinicIdentifier).maybeSingle()
-    return result
-  }
-
-  return withPublicFallback(publicQuery, staffQuery)
+function getOrgIdFromClinicIdentifier(clinicIdentifier: string) {
+  return supabase.from('organizations').select('*').eq('public_identifier', clinicIdentifier).maybeSingle()
 }
 
 function getElapsedMinutes(iso?: string | null, now = Date.now()) {
@@ -113,236 +51,45 @@ function getElapsedMinutes(iso?: string | null, now = Date.now()) {
   return Math.max(0, Math.round(diff / 60000))
 }
 
-async function createOrganizationQrToken(organizationId: string) {
-  const fetchExisting = async () => await withPublicFallback(
-    async () => {
-      const result = await supabaseAnon
-        .from('organization_qr_tokens')
-        .select('*')
-        .eq('organization_id', organizationId)
-        .eq('is_active', true)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-      return result
-    },
-    async () => {
-      const result = await supabase
-        .from('organization_qr_tokens')
-        .select('*')
-        .eq('organization_id', organizationId)
-        .eq('is_active', true)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-      return result
-    },
-  )
-
-  const { data: existing, error: existingError } = await fetchExisting()
-  if (existingError && existingError.code !== 'PGRST116') throw existingError
-  if (existing) return existing
-
-  const token = generateSecureQrToken(32)
-  const createToken = async () => await withPublicFallback(
-    async () => {
-      const result = await supabaseAnon
-        .from('organization_qr_tokens')
-        .insert({
-          organization_id: organizationId,
-          token,
-          is_active: true,
-          expires_at: null,
-        })
-        .select('*')
-        .single()
-      return result
-    },
-    async () => {
-      const result = await supabase
-        .from('organization_qr_tokens')
-        .insert({
-          organization_id: organizationId,
-          token,
-          is_active: true,
-          expires_at: null,
-        })
-        .select('*')
-        .single()
-      return result
-    },
-  )
-
-  const { data, error } = await createToken()
-  if (error) throw error
-  return data
-}
-
 export const queueService = {
   ensureAccessToken: async (clinicIdentifier: string): Promise<string> => {
     const { data: org, error: orgError } = await getOrgIdFromClinicIdentifier(clinicIdentifier)
     if (orgError) throw orgError
     if (!org) throw new Error('Clinic not found.')
 
-    const fetchActiveToken = async () => {
-      const response = await withPublicFallback(
-        async () => {
-          const result = await supabaseAnon
-            .from('organization_qr_tokens')
-            .select('*')
-            .eq('organization_id', org.id)
-            .eq('is_active', true)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle()
-          return result
-        },
-        async () => {
-          const result = await supabase
-            .from('organization_qr_tokens')
-            .select('*')
-            .eq('organization_id', org.id)
-            .eq('is_active', true)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle()
-          return result
-        },
-      )
-      return response
-    }
+    const { data: existing, error: existingError } = await supabase
+      .from('organization_qr_tokens')
+      .select('*')
+      .eq('organization_id', org.id)
+      .eq('is_active', true)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
 
-    const { data: existing, error: existingError } = await fetchActiveToken()
     if (existingError && existingError.code !== 'PGRST116') throw existingError
     if (existing) return existing.token
 
-    const tokenRow = await createOrganizationQrToken(org.id)
-    return tokenRow.token
-  },
-  regenerateAccessToken: async (clinicIdentifier: string): Promise<string> => {
-    const { data: org, error: orgError } = await getOrgIdFromClinicIdentifier(clinicIdentifier)
-    if (orgError) throw orgError
-    if (!org) throw new Error('Clinic not found.')
-
-    const fetchActiveTokens = async () => await withPublicFallback(
-      async () => {
-        const result = await supabaseAnon
-          .from('organization_qr_tokens')
-          .select('*')
-          .eq('organization_id', org.id)
-          .eq('is_active', true)
-        return result
-      },
-      async () => {
-        const result = await supabase
-          .from('organization_qr_tokens')
-          .select('*')
-          .eq('organization_id', org.id)
-          .eq('is_active', true)
-        return result
-      },
-    )
-
-    const { data: activeTokens, error: listError } = await fetchActiveTokens()
-    if (listError) throw listError
-
-    if (activeTokens && activeTokens.length > 0) {
-      const deactivate = await withPublicFallback(
-        async () => {
-          const result = await supabaseAnon
-            .from('organization_qr_tokens')
-            .update({ is_active: false, updated_at: new Date().toISOString() })
-            .in('id', activeTokens.map((item) => item.id))
-          return result
-        },
-        async () => {
-          const result = await supabase
-            .from('organization_qr_tokens')
-            .update({ is_active: false, updated_at: new Date().toISOString() })
-            .in('id', activeTokens.map((item) => item.id))
-          return result
-        },
-      )
-
-      if (deactivate.error) throw deactivate.error
-    }
-
-    const tokenRow = await createOrganizationQrToken(org.id)
-    return tokenRow.token
-  },
-  getAccessTokenDetails: async (clinicIdentifier: string): Promise<{ token: string; link: string }> => {
-    const token = await queueService.ensureAccessToken(clinicIdentifier)
-    return {
+    const token = crypto.randomUUID().replace(/-/g, '')
+    const { error } = await supabase.from('organization_qr_tokens').insert({
+      organization_id: org.id,
       token,
-      link: getQueueJoinUrl(clinicIdentifier, token),
-    }
-  },
-  issueAccessToken: async (clinicIdentifier: string): Promise<{ token: string; link: string }> => {
-    const { data: org, error: orgError } = await getOrgIdFromClinicIdentifier(clinicIdentifier)
-    if (orgError) throw orgError
-    if (!org) throw new Error('Clinic not found.')
+      is_active: true,
+      expires_at: null,
+    })
 
-    const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString()
-    const token = generateSecureQrToken(32)
-
-    const insertToken = async () => {
-      const response = await withPublicFallback(
-        async () => {
-          const result = await supabaseAnon
-            .from('organization_qr_tokens')
-            .insert({
-              organization_id: org.id,
-              token,
-              is_active: true,
-              expires_at: expiresAt,
-            })
-            .select('*')
-            .single()
-          return result
-        },
-        async () => {
-          const result = await supabase
-            .from('organization_qr_tokens')
-            .insert({
-              organization_id: org.id,
-              token,
-              is_active: true,
-              expires_at: expiresAt,
-            })
-            .select('*')
-            .single()
-          return result
-        },
-      )
-
-      return response
-    }
-
-    const { data, error } = await insertToken()
     if (error) throw error
-    if (!data) {
-      throw new Error('Queue access is invalid or expired.')
-    }
-
-    return {
-      token: data.token,
-      link: getQueueJoinUrl(clinicIdentifier, data.token),
-    }
+    return token
   },
   validateAccessToken: async (token: string): Promise<{ clinicIdentifier: string; clinicName: string }> => {
-    const { data, error } = await supabaseAnon
+    const { data, error } = await supabase
       .from('organization_qr_tokens')
-      .select('token, organization_id, is_active, expires_at, organizations!inner(public_identifier, name)')
+      .select('token, organization_id, is_active, organizations!inner(public_identifier, name)')
       .eq('token', token)
       .eq('is_active', true)
       .maybeSingle()
 
     if (error) throw error
     if (!data) {
-      throw new Error('Queue access is invalid or expired.')
-    }
-
-    if (data.expires_at && new Date(data.expires_at).getTime() < Date.now()) {
       throw new Error('Queue access is invalid or expired.')
     }
 
@@ -372,8 +119,7 @@ export const queueService = {
       }
     }
 
-    const client = await getQueueClient()
-    const { data: entries, error } = await client
+    const { data: entries, error } = await supabase
       .from('queue_entries')
       .select('*')
       .eq('organization_id', org.id)
@@ -438,8 +184,7 @@ export const queueService = {
     const { data: org } = await getOrgIdFromClinicIdentifier(clinicIdentifier)
     if (!org) throw new Error('Clinic not found.')
 
-    const client = await getQueueClient()
-    const { data, error } = await client
+    const { data, error } = await supabase
       .from('queue_entries')
       .select('*')
       .eq('organization_id', org.id)
@@ -479,24 +224,34 @@ export const queueService = {
     if (!org) throw new Error('Clinic not found.')
 
     const today = new Date().toISOString().slice(0, 10)
-    const { data: session, error: sessionError } = await supabaseAnon
+    let { data: session, error: sessionError } = await supabase
       .from('queue_sessions')
       .select('*')
       .eq('organization_id', org.id)
       .eq('session_date', today)
-      .eq('is_active', true)
       .maybeSingle()
 
     if (sessionError) throw sessionError
+
     if (!session) {
-      throw new Error('This clinic queue is not open yet. Please ask staff to start the queue session.')
+      const insert = await supabase
+        .from('queue_sessions')
+        .insert({ organization_id: org.id, session_date: today, queue_prefix: org.queue_prefix, next_number: 1, is_active: true })
+        .select('*')
+        .single()
+      if (insert.error) throw insert.error
+      session = insert.data
     }
 
-    const { data, error } = await supabaseAnon
+    const nextNumber = (session.next_number ?? 1).toString().padStart(3, '0')
+    const queueNumber = `${org.queue_prefix}${nextNumber}`
+
+    const { data, error } = await supabase
       .from('queue_entries')
       .insert({
         organization_id: org.id,
         queue_session_id: session.id,
+        queue_number: queueNumber,
         student_id: payload.studentId,
         full_name: payload.fullName,
         course: payload.course,
@@ -509,11 +264,10 @@ export const queueService = {
 
     if (error) throw error
 
-    const peopleAhead = (await queueService.getSnapshot(clinicIdentifier)).entries.filter((candidate) => {
-      if (candidate.status !== 'WAITING') return false
-      if (!candidate.joinedAt || !data.joined_at) return false
-      return new Date(candidate.joinedAt).getTime() < new Date(data.joined_at).getTime()
-    }).length
+    await supabase
+      .from('queue_sessions')
+      .update({ next_number: (session.next_number ?? 1) + 1, updated_at: new Date().toISOString() })
+      .eq('id', session.id)
 
     return {
       id: data.id,
@@ -528,8 +282,8 @@ export const queueService = {
       joinedAt: data.joined_at,
       calledAt: data.called_at,
       servedAt: data.started_at ?? data.completed_at,
-      peopleAhead,
-      estimatedWaitMinutes: ['WAITING', 'CALLED'].includes(data.status) ? getElapsedMinutes(data.joined_at) : null,
+      peopleAhead: 0,
+      estimatedWaitMinutes: null,
     }
   },
 
@@ -787,26 +541,18 @@ export const analyticsService = {
 
 export const adminUsersService = {
   list: async (): Promise<{ users: AdminAccount[] }> => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*, organizations!organization_id(name, public_identifier)')
-      .order('created_at', { ascending: false })
-
+    const { data, error } = await supabase.from('profiles').select('*').order('created_at', { ascending: false })
     if (error) throw error
 
-    const users: AdminAccount[] = (data ?? []).map((profile) => {
-      const org = Array.isArray(profile.organizations) ? profile.organizations[0] : profile.organizations
-
-      return {
-        id: profile.id,
-        name: profile.full_name,
-        email: profile.email,
-        role: mapRole(profile.role),
-        organizationId: profile.organization_id ?? undefined,
-        clinicName: org?.name ?? undefined,
-        status: profile.is_active ? 'active' : 'disabled',
-      }
-    })
+    const users: AdminAccount[] = (data ?? []).map((profile) => ({
+      id: profile.id,
+      name: profile.full_name,
+      email: profile.email,
+      role: mapRole(profile.role),
+      organizationId: profile.organization_id ?? undefined,
+      clinicName: undefined,
+      status: profile.is_active ? 'active' : 'disabled',
+    }))
 
     return { users }
   },
@@ -829,33 +575,6 @@ export const superAdminService = {
 
     return { organizations }
   },
-  updateOrganization: async (id: string, payload: Record<string, string>): Promise<Organization> => {
-    const { data, error } = await supabase
-      .from('organizations')
-      .update({
-        name: payload.name ?? payload.schoolName ?? undefined,
-        public_identifier: payload.public_identifier ?? payload.clinicIdentifier ?? undefined,
-        queue_prefix: payload.queue_prefix ?? payload.queuePrefix ?? undefined,
-        address: payload.address ?? undefined,
-        contact_information: payload.contact_information ?? payload.contact ?? undefined,
-        is_active: payload.is_active ? payload.is_active === 'true' : undefined,
-      })
-      .eq('id', id)
-      .select('*')
-      .single()
-
-    if (error) throw error
-
-    return {
-      id: data.id,
-      schoolName: data.name,
-      clinicName: data.name,
-      clinicIdentifier: data.public_identifier,
-      adminName: undefined,
-      status: data.is_active ? 'active' : 'disabled',
-      createdAt: data.created_at,
-    }
-  },
   createOrganization: async (payload: Record<string, string>): Promise<Organization> => {
     const { data, error } = await supabase.from('organizations').insert({
       name: payload.name ?? payload.schoolName ?? 'Clinic',
@@ -869,8 +588,6 @@ export const superAdminService = {
 
     if (error) throw error
 
-    await createOrganizationQrToken(data.id)
-
     return {
       id: data.id,
       schoolName: data.name,
@@ -883,32 +600,6 @@ export const superAdminService = {
   },
   administrators: async (): Promise<{ users: AdminAccount[] }> => {
     return adminUsersService.list()
-  },
-  updateAdmin: async (id: string, payload: Record<string, string>): Promise<AdminAccount> => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .update({
-        full_name: payload.name ?? undefined,
-        email: payload.email ?? undefined,
-        role: (payload.role ?? 'ADMIN') as UserRole,
-        organization_id: payload.organizationId ?? null,
-        is_active: payload.is_active ? payload.is_active === 'true' : undefined,
-      })
-      .eq('id', id)
-      .select('*')
-      .single()
-
-    if (error) throw error
-
-    return {
-      id: data.id,
-      name: data.full_name,
-      email: data.email,
-      role: mapRole(data.role),
-      organizationId: data.organization_id ?? undefined,
-      clinicName: undefined,
-      status: data.is_active ? 'active' : 'disabled',
-    }
   },
   createAdmin: async (payload: Record<string, string>): Promise<AdminAccount> => {
     const name = payload.name ?? payload.fullName ?? 'New Administrator'
@@ -935,13 +626,5 @@ export const superAdminService = {
       clinicName: undefined,
       status: data.is_active ? 'active' : 'disabled',
     }
-  },
-  deleteAdmin: async (id: string) => {
-    const { error } = await supabase.from('profiles').delete().eq('id', id)
-    if (error) throw error
-  },
-  deleteOrganization: async (id: string) => {
-    const { error } = await supabase.from('organizations').delete().eq('id', id)
-    if (error) throw error
   },
 }

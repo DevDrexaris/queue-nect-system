@@ -10,6 +10,20 @@ export const QUEUE_STATUSES = [
 
 export type QueueStatus = (typeof QUEUE_STATUSES)[number]
 
+export function formatQueueStatusLabel(status: QueueStatus) {
+  const labels: Record<QueueStatus, string> = {
+    WAITING: 'Waiting',
+    CALLED: 'Called',
+    SERVING: 'Currently serving',
+    COMPLETED: 'Served',
+    SERVED: 'Served',
+    CANCELLED: 'Cancelled',
+    NO_SHOW: 'No show',
+  }
+
+  return labels[status]
+}
+
 export const VISIT_PURPOSES = [
   'Consultation',
   'Check-up',

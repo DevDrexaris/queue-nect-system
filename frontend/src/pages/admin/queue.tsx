@@ -14,10 +14,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/ca
 import { TBody, TD, TH, THead, TR, Table } from '../../components/ui/table'
 import { useAuth } from '../../hooks/use-auth'
 import { useQueueSnapshot } from '../../hooks/use-queue-snapshot'
-import { formatTime } from '../../lib/format'
+import { formatTime, formatWait } from '../../lib/format'
 import { userMessage } from '../../lib/api'
 import { queueService } from '../../services/api'
-import { QUEUE_STATUSES, type QueueEntry, type QueueStatus } from '../../types'
+import { QUEUE_STATUSES, formatQueueStatusLabel, type QueueEntry, type QueueStatus } from '../../types'
 
 export function AdminQueuePage() {
   const { user } = useAuth()
@@ -96,7 +96,7 @@ export function AdminQueuePage() {
                   Skip
                 </Button>
                 <Button variant="ghost" onClick={() => void run('recall', serving)}>
-                  Recall
+                  Set waiting
                 </Button>
               </div>
             </div>
@@ -118,7 +118,7 @@ export function AdminQueuePage() {
           <option value="all">All statuses</option>
           {QUEUE_STATUSES.map((item) => (
             <option key={item} value={item}>
-              {item.replace('_', ' ')}
+              {formatQueueStatusLabel(item)}
             </option>
           ))}
         </Select>
@@ -140,6 +140,7 @@ export function AdminQueuePage() {
                   <TH>Student</TH>
                   <TH>Purpose</TH>
                   <TH>Time joined</TH>
+                  <TH>Waited</TH>
                   <TH>Status</TH>
                   <TH>Actions</TH>
                 </TR>
@@ -156,6 +157,7 @@ export function AdminQueuePage() {
                     </TD>
                     <TD>{item.purpose}</TD>
                     <TD>{formatTime(item.joinedAt)}</TD>
+                    <TD>{formatWait(item.estimatedWaitMinutes)}</TD>
                     <TD>
                       <QueueStatusBadge status={item.status as QueueStatus} />
                     </TD>
@@ -163,6 +165,7 @@ export function AdminQueuePage() {
                       <ActionMenu>
                         <ActionItem onClick={() => void run('call', item)}>Call</ActionItem>
                         <ActionItem onClick={() => void run('serve', item)}>Serve</ActionItem>
+                        <ActionItem onClick={() => void run('recall', item)}>Set waiting</ActionItem>
                         <ActionItem onClick={() => void run('skip', item)}>Skip</ActionItem>
                         <ActionItem destructive onClick={() => setPending(item)}>
                           Cancel
@@ -182,6 +185,7 @@ export function AdminQueuePage() {
                   <ActionMenu>
                     <ActionItem onClick={() => void run('call', item)}>Call</ActionItem>
                     <ActionItem onClick={() => void run('serve', item)}>Serve</ActionItem>
+                    <ActionItem onClick={() => void run('recall', item)}>Set waiting</ActionItem>
                     <ActionItem onClick={() => void run('skip', item)}>Skip</ActionItem>
                     <ActionItem destructive onClick={() => setPending(item)}>
                       Cancel
@@ -190,8 +194,9 @@ export function AdminQueuePage() {
                 </div>
                 <p className="mt-2 font-medium">{item.studentName}</p>
                 <p className="text-sm text-muted-foreground">{item.purpose}</p>
-                <div className="mt-3">
+                <div className="mt-3 flex items-center justify-between gap-3">
                   <QueueStatusBadge status={item.status} />
+                  <span className="text-xs text-muted-foreground">Waited {formatWait(item.estimatedWaitMinutes)}</span>
                 </div>
               </div>
             ))}

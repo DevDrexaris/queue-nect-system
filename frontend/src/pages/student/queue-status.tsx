@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { queueService } from '../../services/api'
 import { userMessage } from '../../lib/api'
@@ -11,6 +11,7 @@ import { QueueStatusBadge } from '../../components/ui/queue-status-badge'
 import { ConnectionBanner } from '../../components/ui/connection-banner'
 import { EmptyState, ErrorState, LoadingState } from '../../components/ui/states'
 import { buttonVariants } from '../../components/ui/button'
+import { formatWait } from '../../lib/format'
 import { cn } from '../../lib/utils'
 import type { QueueEntry, QueueSnapshot } from '../../types'
 
@@ -23,6 +24,52 @@ function headline(entry: QueueEntry) {
   return 'Please wait for your number to be called.'
 }
 
+function playQueueCallTone() {
+  if (typeof window === 'undefined') return
+
+  const AudioConstructor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+  if (!AudioConstructor) return
+
+  try {
+    const audioContext = new AudioConstructor()
+    const oscillator = audioContext.createOscillator()
+    const gain = audioContext.createGain()
+
+    oscillator.type = 'sine'
+    oscillator.frequency.value = 880
+    gain.gain.value = 0.12
+
+    oscillator.connect(gain)
+    gain.connect(audioContext.destination)
+
+    const start = audioContext.currentTime
+    oscillator.start(start)
+    oscillator.stop(start + 0.35)
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.4)
+
+    void audioContext.resume()
+  } catch {
+    // Browsers may block autoplay audio until a user gesture occurs; we best-effort play the beep.
+  }
+}
+
+async function maybeShowQueueNotification(queueNumber: string) {
+  if (typeof window === 'undefined' || !('Notification' in window)) return
+
+  if (Notification.permission === 'default') {
+    await Notification.requestPermission()
+  }
+
+  if (Notification.permission !== 'granted') return
+
+  if (document.visibilityState === 'hidden') {
+    new Notification('Queue-Nect', {
+      body: `Your number ${queueNumber} is now being called.`,
+      tag: 'queue-call',
+    })
+  }
+}
+
 export function QueueStatusPage() {
   const [ticket] = useState(() => readStoredTicket())
   const online = useOnlineStatus()
@@ -30,6 +77,7 @@ export function QueueStatusPage() {
   const [snapshot, setSnapshot] = useState<QueueSnapshot | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(Boolean(ticket))
+  const lastNotifiedRef = useRef<string | null>(null)
 
   const load = useCallback(async () => {
     if (!ticket) return
@@ -51,6 +99,23 @@ export function QueueStatusPage() {
   }, [ticket])
 
   usePolling(load, 5000, Boolean(ticket) && online)
+
+  useEffect(() => {
+    if (!entry || entry.status !== 'CALLED') return
+    if (lastNotifiedRef.current === entry.id) return
+
+    lastNotifiedRef.current = entry.id
+    playQueueCallTone()
+
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+      void maybeShowQueueNotification(entry.queueNumber)
+      return
+    }
+
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      void maybeShowQueueNotification(entry.queueNumber)
+    }
+  }, [entry])
 
   if (!ticket) {
     return (
@@ -101,6 +166,10 @@ export function QueueStatusPage() {
           <div>
             <p className="text-xs text-muted-foreground uppercase">People ahead</p>
             <p className="mt-1 font-mono text-2xl font-semibold tabular-nums">{entry.peopleAhead ?? '—'}</p>
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground uppercase">Estimated wait</p>
+            <p className="mt-1 font-mono text-2xl font-semibold tabular-nums">{formatWait(entry.estimatedWaitMinutes)}</p>
           </div>
           <div className="col-span-2">
             <p className="text-xs text-muted-foreground uppercase">Status</p>

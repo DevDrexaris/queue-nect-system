@@ -10,7 +10,7 @@ import { TBody, TD, TH, THead, TR, Table } from '../../components/ui/table'
 import { historyService } from '../../services/api'
 import { userMessage } from '../../lib/api'
 import { formatDateTime, formatDuration, formatTime } from '../../lib/format'
-import { QUEUE_STATUSES, VISIT_PURPOSES, type QueueEntry } from '../../types'
+import { QUEUE_STATUSES, formatQueueStatusLabel, VISIT_PURPOSES, type QueueEntry } from '../../types'
 
 export function AdminHistoryPage() {
   const [date, setDate] = useState(() => new Date().toISOString().slice(0, 10))
@@ -59,7 +59,7 @@ export function AdminHistoryPage() {
             <option value="all">All</option>
             {QUEUE_STATUSES.map((item) => (
               <option key={item} value={item}>
-                {item.replace('_', ' ')}
+                {formatQueueStatusLabel(item)}
               </option>
             ))}
           </Select>
