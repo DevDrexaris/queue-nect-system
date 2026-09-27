@@ -97,16 +97,16 @@ export function AdminDashboardPage() {
               <Button
                 size="sm"
                 variant={calledEntry ? 'default' : 'outline'}
-                className={calledEntry ? 'border-emerald-500 bg-emerald-600 text-white shadow-[0_0_18px_rgba(16,185,129,0.45)] ring-2 ring-emerald-300/70 animate-pulse' : ''}
+                className={calledEntry ? 'border-emerald-500 bg-emerald-600 text-white shadow-[0_0_12px_rgba(16,185,129,0.28)] ring-1 ring-emerald-300/70 animate-pulse' : ''}
                 onClick={() => void serveNext()}
                 loading={calling}
               >
                 Serve next
               </Button>
-              {calledEntry ? (
-                <div className="pointer-events-none absolute -top-7 right-0 z-10 inline-flex max-w-[11rem] items-center gap-1.5 rounded-full border border-emerald-300/80 bg-emerald-500/10 px-2 py-1 text-[9px] font-medium tracking-[0.12em] text-emerald-700 shadow-[0_4px_14px_rgba(16,185,129,0.18)] backdrop-blur-sm animate-[queue-call-toast_220ms_ease-out]">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.9)]" />
-                  SERVE NOW
+              {calledEntry && serving?.status === 'CALLED' ? (
+                <div className="pointer-events-none absolute -top-5 right-0 z-10 inline-flex items-center gap-1 rounded-full border border-emerald-300/80 bg-emerald-500/10 px-1.5 py-0.5 text-[7px] font-medium tracking-[0.12em] text-emerald-700 shadow-[0_3px_12px_rgba(16,185,129,0.18)] backdrop-blur-sm animate-[queue-call-toast_220ms_ease-out]">
+                  <span className="h-1.25 w-1.25 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.9)]" />
+                  SERVE
                 </div>
               ) : null}
             </div>
@@ -134,7 +134,7 @@ export function AdminDashboardPage() {
                     ? 'border-amber-400/80 [box-shadow:0_0_0_1px_rgba(251,146,60,0.36),0_0_22px_rgba(251,146,60,0.18)] animate-[queue-card-glow-amber_1.35s_ease-in-out_infinite]'
                     : '',
                   serving.status === 'SERVING'
-                    ? 'border-emerald-400/80 [box-shadow:0_0_0_1px_rgba(16,185,129,0.28),0_0_26px_rgba(16,185,129,0.16)] animate-[queue-card-glow-emerald_1.35s_ease-in-out_infinite]'
+                    ? 'border-emerald-400/80 [box-shadow:0_0_0_1px_rgba(16,185,129,0.28),0_0_16px_rgba(16,185,129,0.12)]'
                     : '',
                 ].join(' ')}
               >
