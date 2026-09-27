@@ -1,5 +1,5 @@
 import { cn } from '../../lib/utils'
-import bshireLogo from '../../assets/bshirelogo.jpg'
+import bshireLogo from '../../assets/bshirelogo.png'
 
 type Size = 'sm' | 'md' | 'lg'
 
