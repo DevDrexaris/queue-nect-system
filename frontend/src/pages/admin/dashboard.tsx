@@ -30,6 +30,20 @@ export function AdminDashboardPage() {
     setCalling(true)
     try {
       const entry = await queueService.callNext(clinicId)
+      toast.success(`Calling ${entry.queueNumber}`)
+      await reload()
+    } catch (caught) {
+      toast.error(userMessage(caught))
+    } finally {
+      setCalling(false)
+    }
+  }
+
+  async function serveNext() {
+    if (!clinicId) return
+    setCalling(true)
+    try {
+      const entry = await queueService.serveNext(clinicId)
       toast.success(`Now serving ${entry.queueNumber}`)
       await reload()
     } catch (caught) {
@@ -74,9 +88,14 @@ export function AdminDashboardPage() {
         title={`${greetingForNow()}, ${user?.name || 'Admin'}`}
         description={user?.clinic?.name}
         actions={
-          <Button onClick={() => void callNext()} loading={calling}>
-            {calling ? 'Calling...' : 'Call next'}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => void callNext()} loading={calling}>
+              {calling ? 'Calling...' : 'Call next'}
+            </Button>
+            <Button variant="outline" onClick={() => void serveNext()} loading={calling}>
+              Serve next
+            </Button>
+          </div>
         }
       />
 
@@ -98,12 +117,12 @@ export function AdminDashboardPage() {
                 <p className="mt-2 text-sm font-medium">{serving.studentName}</p>
                 <p className="text-sm text-muted-foreground">{serving.purpose}</p>
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <Button onClick={() => void act(serving, 'serve')}>Mark served</Button>
+                  <Button onClick={() => void act(serving, 'serve')}>Finish service</Button>
                   <Button variant="outline" onClick={() => void act(serving, 'skip')}>
                     Skip
                   </Button>
                   <Button variant="ghost" onClick={() => void act(serving, 'recall')}>
-                    Recall
+                    Set waiting
                   </Button>
                 </div>
               </div>

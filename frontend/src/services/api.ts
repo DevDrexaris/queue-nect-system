@@ -113,6 +113,17 @@ function getElapsedMinutes(iso?: string | null, now = Date.now()) {
   return Math.max(0, Math.round(diff / 60000))
 }
 
+function countPeopleAhead(entries: Array<{ id: string; status: string; joined_at?: string | null }>, currentId: string, joinedAt?: string | null) {
+  if (!joinedAt) return 0
+
+  return entries.filter((entry) => {
+    if (entry.id === currentId) return false
+    if (!['WAITING', 'CALLED'].includes(entry.status)) return false
+    if (!entry.joined_at) return false
+    return new Date(entry.joined_at).getTime() < new Date(joinedAt).getTime()
+  }).length
+}
+
 async function createOrganizationQrToken(organizationId: string) {
   const fetchExisting = async () => await withPublicFallback(
     async () => {
@@ -382,12 +393,7 @@ export const queueService = {
     if (error) throw error
 
     const mapped = (entries ?? []).map((entry) => {
-      const peopleAhead = (entries ?? []).filter((candidate) => {
-        if (candidate.id === entry.id || candidate.status !== 'WAITING') return false
-        if (!candidate.joined_at || !entry.joined_at) return false
-        return new Date(candidate.joined_at).getTime() < new Date(entry.joined_at).getTime()
-      }).length
-
+      const peopleAhead = countPeopleAhead(entries ?? [], entry.id, entry.joined_at)
       const estimatedWaitMinutes = ['WAITING', 'CALLED'].includes(entry.status) ? getElapsedMinutes(entry.joined_at) : null
 
       return {
@@ -408,7 +414,7 @@ export const queueService = {
       }
     })
 
-    const nowServing = mapped.find((entry) => entry.status === 'SERVING') ?? null
+    const nowServing = mapped.find((entry) => entry.status === 'SERVING') ?? mapped.find((entry) => entry.status === 'CALLED') ?? null
     const upNext = mapped.filter((entry) => entry.status === 'WAITING').slice(0, 5)
     const waitingCount = mapped.filter((entry) => entry.status === 'WAITING').length
     const servingCount = mapped.filter((entry) => entry.status === 'SERVING').length
@@ -449,11 +455,11 @@ export const queueService = {
     if (error) throw error
 
     const snapshot = await queueService.getSnapshot(clinicIdentifier)
-    const peopleAhead = snapshot.entries.filter((candidate) => {
-      if (candidate.status !== 'WAITING') return false
-      if (!candidate.joinedAt || !data.joined_at) return false
-      return new Date(candidate.joinedAt).getTime() < new Date(data.joined_at).getTime()
-    }).length
+    const peopleAhead = countPeopleAhead(
+      snapshot.entries.map((entry) => ({ id: entry.id, status: entry.status, joined_at: entry.joinedAt })),
+      data.id,
+      data.joined_at,
+    )
 
     return {
       id: data.id,
@@ -509,11 +515,11 @@ export const queueService = {
 
     if (error) throw error
 
-    const peopleAhead = (await queueService.getSnapshot(clinicIdentifier)).entries.filter((candidate) => {
-      if (candidate.status !== 'WAITING') return false
-      if (!candidate.joinedAt || !data.joined_at) return false
-      return new Date(candidate.joinedAt).getTime() < new Date(data.joined_at).getTime()
-    }).length
+    const peopleAhead = countPeopleAhead(
+      (await queueService.getSnapshot(clinicIdentifier)).entries.map((entry) => ({ id: entry.id, status: entry.status, joined_at: entry.joinedAt })),
+      data.id,
+      data.joined_at,
+    )
 
     return {
       id: data.id,
@@ -552,6 +558,54 @@ export const queueService = {
       .from('queue_entries')
       .update({ status: 'CALLED', called_at: new Date().toISOString(), updated_at: new Date().toISOString() })
       .eq('id', waiting.id)
+      .select('*')
+      .single()
+
+    if (error) throw error
+
+    return {
+      id: data.id,
+      clinicId: data.organization_id,
+      queueNumber: data.queue_number,
+      studentId: data.student_id,
+      studentName: data.full_name,
+      course: data.course,
+      yearLevel: data.year_level,
+      purpose: data.purpose,
+      status: data.status,
+      joinedAt: data.joined_at,
+      calledAt: data.called_at,
+      servedAt: data.started_at ?? data.completed_at,
+      peopleAhead: 0,
+      estimatedWaitMinutes: null,
+    }
+  },
+
+  serveNext: async (clinicIdentifier: string): Promise<QueueEntry> => {
+    const { data: org } = await getOrgIdFromClinicIdentifier(clinicIdentifier)
+    if (!org) throw new Error('Clinic not found.')
+
+    const { data: target } = await supabase
+      .from('queue_entries')
+      .select('*')
+      .eq('organization_id', org.id)
+      .in('status', ['CALLED', 'WAITING'])
+      .order('called_at', { ascending: false, nullsFirst: true })
+      .order('joined_at', { ascending: true })
+      .limit(1)
+      .maybeSingle()
+
+    if (!target) throw new Error('No one is ready to serve.')
+
+    const { data, error } = await supabase
+      .from('queue_entries')
+      .update({
+        status: 'SERVING',
+        called_at: target.called_at ?? new Date().toISOString(),
+        started_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', target.id)
       .select('*')
       .single()
 

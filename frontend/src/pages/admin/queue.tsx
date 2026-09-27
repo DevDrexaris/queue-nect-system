@@ -39,6 +39,20 @@ export function AdminQueuePage() {
     setCalling(true)
     try {
       const entry = await queueService.callNext(clinicId)
+      toast.success(`Calling ${entry.queueNumber}`)
+      await reload()
+    } catch (caught) {
+      toast.error(userMessage(caught))
+    } finally {
+      setCalling(false)
+    }
+  }
+
+  async function serveNext() {
+    if (!clinicId) return
+    setCalling(true)
+    try {
+      const entry = await queueService.serveNext(clinicId)
       toast.success(`Now serving ${entry.queueNumber}`)
       await reload()
     } catch (caught) {
@@ -71,9 +85,14 @@ export function AdminQueuePage() {
         title="Queue Management"
         description="Call, serve, skip, or cancel students in the live queue."
         actions={
-          <Button onClick={() => void callNext()} loading={calling}>
-            {calling ? 'Calling...' : 'Call next'}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => void callNext()} loading={calling}>
+              {calling ? 'Calling...' : 'Call next'}
+            </Button>
+            <Button variant="outline" onClick={() => void serveNext()} loading={calling}>
+              Serve next
+            </Button>
+          </div>
         }
       />
 
@@ -91,7 +110,7 @@ export function AdminQueuePage() {
                 <p className="mt-1 text-xs text-muted-foreground">Started: {formatTime(serving.calledAt)}</p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <Button onClick={() => void run('serve', serving)}>Mark served</Button>
+                <Button onClick={() => void run('serve', serving)}>Finish service</Button>
                 <Button variant="outline" onClick={() => void run('skip', serving)}>
                   Skip
                 </Button>

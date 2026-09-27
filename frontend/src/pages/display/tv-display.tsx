@@ -46,6 +46,7 @@ export function TvDisplayPage() {
   const serving = data?.nowServing
   const next = data?.upNext ?? []
   const active = Boolean(serving || next.length)
+  const isCalling = serving?.status === 'CALLED'
 
   useEffect(() => {
     if (!serving?.queueNumber) return
@@ -88,10 +89,21 @@ export function TvDisplayPage() {
           </div>
         ) : (
           <div className="grid gap-10 xl:grid-cols-[1.4fr_0.6fr] xl:items-center">
-            <section className={cn('rounded-3xl bg-white/5 p-8 text-center transition-transform duration-300', flash && 'scale-[1.02] bg-white/10')}>
-              <p className="text-sm font-medium tracking-[0.25em] text-sky-300 uppercase">Now serving</p>
+            <section
+              className={cn(
+                'rounded-3xl border p-8 text-center transition-all duration-300',
+                isCalling
+                  ? 'border-amber-300/70 bg-amber-400/10 shadow-[0_0_35px_rgba(251,191,36,0.35)]'
+                  : 'border-white/10 bg-white/5',
+                flash && 'scale-[1.02] border-amber-200/80 bg-amber-300/10',
+              )}
+            >
+              <div className="mb-3 flex items-center justify-center gap-2 text-sm font-medium tracking-[0.25em] uppercase text-sky-300">
+                <span className={cn(isCalling ? 'text-amber-200' : 'text-sky-300')}>{isCalling ? 'Calling' : 'Now serving'}</span>
+                {isCalling ? <span className="h-2.5 w-2.5 rounded-full bg-amber-300 shadow-[0_0_16px_rgba(252,211,77,0.8)]" /> : null}
+              </div>
               <div className="mt-4">
-                <QueueNumber value={serving?.queueNumber || '—'} size="display" className="text-white" />
+                <QueueNumber value={serving?.queueNumber || '—'} size="display" className={cn('text-white', isCalling && 'text-amber-100')} />
               </div>
             </section>
             <section>

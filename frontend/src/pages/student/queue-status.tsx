@@ -77,6 +77,7 @@ export function QueueStatusPage() {
   const [snapshot, setSnapshot] = useState<QueueSnapshot | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(Boolean(ticket))
+  const [notificationEnabled, setNotificationEnabled] = useState(false)
   const lastNotifiedRef = useRef<string | null>(null)
 
   const load = useCallback(async () => {
@@ -99,6 +100,18 @@ export function QueueStatusPage() {
   }, [ticket])
 
   usePolling(load, 5000, Boolean(ticket) && online)
+
+  useEffect(() => {
+    if (typeof window !== 'undefined' && 'Notification' in window) {
+      setNotificationEnabled(Notification.permission === 'granted')
+    }
+  }, [])
+
+  async function enableNotifications() {
+    if (typeof window === 'undefined' || !('Notification' in window)) return
+    const permission = await Notification.requestPermission()
+    setNotificationEnabled(permission === 'granted')
+  }
 
   useEffect(() => {
     if (!entry || entry.status !== 'CALLED') return
@@ -176,6 +189,20 @@ export function QueueStatusPage() {
             <div className="mt-2">
               <QueueStatusBadge status={entry.status} />
             </div>
+            {'Notification' in window ? (
+              <button
+                type="button"
+                onClick={() => void enableNotifications()}
+                className={cn(
+                  'mt-3 inline-flex items-center justify-center rounded-md border px-3 py-2 text-xs font-medium transition-colors',
+                  notificationEnabled
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                    : 'border-border bg-muted text-foreground hover:bg-muted/80',
+                )}
+              >
+                {notificationEnabled ? 'Notifications enabled' : 'Enable notifications'}
+              </button>
+            ) : null}
           </div>
         </CardContent>
       </Card>
