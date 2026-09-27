@@ -108,30 +108,66 @@ async function getOrgIdFromClinicIdentifier(clinicIdentifier: string) {
 }
 
 async function createOrganizationQrToken(organizationId: string) {
-  const { data: existing, error: existingError } = await supabaseAnon
-    .from('organization_qr_tokens')
-    .select('*')
-    .eq('organization_id', organizationId)
-    .eq('is_active', true)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
+  const fetchExisting = async () => await withPublicFallback(
+    async () => {
+      const result = await supabaseAnon
+        .from('organization_qr_tokens')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      return result
+    },
+    async () => {
+      const result = await supabase
+        .from('organization_qr_tokens')
+        .select('*')
+        .eq('organization_id', organizationId)
+        .eq('is_active', true)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      return result
+    },
+  )
 
+  const { data: existing, error: existingError } = await fetchExisting()
   if (existingError && existingError.code !== 'PGRST116') throw existingError
   if (existing) return existing
 
   const token = generateSecureQrToken(32)
-  const { data, error } = await supabaseAnon
-    .from('organization_qr_tokens')
-    .insert({
-      organization_id: organizationId,
-      token,
-      is_active: true,
-      expires_at: null,
-    })
-    .select('*')
-    .single()
+  const createToken = async () => await withPublicFallback(
+    async () => {
+      const result = await supabaseAnon
+        .from('organization_qr_tokens')
+        .insert({
+          organization_id: organizationId,
+          token,
+          is_active: true,
+          expires_at: null,
+        })
+        .select('*')
+        .single()
+      return result
+    },
+    async () => {
+      const result = await supabase
+        .from('organization_qr_tokens')
+        .insert({
+          organization_id: organizationId,
+          token,
+          is_active: true,
+          expires_at: null,
+        })
+        .select('*')
+        .single()
+      return result
+    },
+  )
 
+  const { data, error } = await createToken()
   if (error) throw error
   return data
 }
@@ -430,11 +466,26 @@ export const queueService = {
     if (sessionError) throw sessionError
 
     if (!session) {
-      const insert = await supabaseAnon
-        .from('queue_sessions')
-        .insert({ organization_id: org.id, session_date: today, queue_prefix: org.queue_prefix, next_number: 1, is_active: true })
-        .select('*')
-        .single()
+      const createSession = async () => await withPublicFallback(
+        async () => {
+          const result = await supabaseAnon
+            .from('queue_sessions')
+            .insert({ organization_id: org.id, session_date: today, queue_prefix: org.queue_prefix, next_number: 1, is_active: true })
+            .select('*')
+            .single()
+          return result
+        },
+        async () => {
+          const result = await supabase
+            .from('queue_sessions')
+            .insert({ organization_id: org.id, session_date: today, queue_prefix: org.queue_prefix, next_number: 1, is_active: true })
+            .select('*')
+            .single()
+          return result
+        },
+      )
+
+      const insert = await createSession()
       if (insert.error) throw insert.error
       session = insert.data
     }
