@@ -40,7 +40,13 @@ export const clinicSettingsSchema = z.object({
     .max(3, 'Use up to 3 characters.')
     .regex(/^[A-Za-z]+$/, 'Use letters only.'),
   announcement: z.string().trim().max(280).optional().or(z.literal('')),
-  voiceAnnouncement: z.boolean(),
+  announcementsEnabled: z.boolean(),
+  announcementUseCustom: z.boolean(),
+  announcementTemplate: z.string().trim().min(1).max(280),
+  announcementServiceArea: z.string().trim().min(1).max(100),
+  announcementVoice: z.string().max(160),
+  announcementRate: z.number().min(0.5).max(1.5),
+  announcementVolume: z.number().min(0).max(1),
 })
 
 export const organizationSchema = z.object({

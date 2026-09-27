@@ -6,6 +6,7 @@ import { buttonVariants } from '../../components/ui/button'
 import { ThemeSelector } from '../../components/ui/theme-selector'
 import { queueService } from '../../services/api'
 import { cn } from '../../lib/utils'
+import { userMessage } from '../../lib/api'
 
 export function QueueAccessRequiredPage() {
   const { clinicId = '' } = useParams()
@@ -26,11 +27,7 @@ export function QueueAccessRequiredPage() {
         setLink(details.link)
       } catch (error) {
         setLink('')
-        setErrorMessage(
-          error instanceof Error && error.message
-            ? error.message
-            : 'The QR access system is unavailable right now. Please try again in a moment.'
-        )
+        setErrorMessage(userMessage(error, 'student'))
       } finally {
         setLoading(false)
       }

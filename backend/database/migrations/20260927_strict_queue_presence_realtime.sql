@@ -52,6 +52,7 @@ set cancellation_source = 'ADMIN'
 where status = 'CANCELLED' and cancellation_source is null;
 
 drop policy if exists "Org staff can manage activity log for their org" on public.activity_log;
+drop policy if exists "Org staff can view activity log for their org" on public.activity_log;
 create policy "Org staff can view activity log for their org"
 on public.activity_log
 for select
@@ -114,7 +115,7 @@ begin
 
   if not (
     (old.status = 'WAITING' and new.status in ('CALLED', 'CANCELLED', 'NO_SHOW'))
-    or (old.status = 'CALLED' and new.status in ('SERVING', 'CANCELLED', 'NO_SHOW'))
+    or (old.status = 'CALLED' and new.status in ('SERVING', 'WAITING', 'CANCELLED', 'NO_SHOW'))
     or (old.status = 'SERVING' and new.status in ('COMPLETED', 'CANCELLED'))
   ) then
     raise exception 'Invalid queue transition: % -> %', old.status, new.status;
@@ -166,6 +167,8 @@ declare
 begin
   if tg_op = 'INSERT' then
     v_action := 'QUEUE_JOINED';
+  elsif new.status = 'WAITING' and old.status = 'CALLED' then
+    v_action := 'QUEUE_RETURNED_TO_WAITING';
   elsif new.status is distinct from old.status then
     v_action := case new.status
       when 'CALLED' then 'QUEUE_CALLED'
@@ -543,6 +546,8 @@ begin
       raise exception 'Finish the active call before calling another number';
     end if;
     update public.queue_entries set status = 'CALLED' where id = v_entry.id returning * into v_entry;
+  elsif p_action = 'return_to_waiting' and v_entry.status = 'CALLED' then
+    update public.queue_entries set status = 'WAITING', called_at = null where id = v_entry.id returning * into v_entry;
   elsif p_action = 'serve' and v_entry.status = 'CALLED' then
     if exists (select 1 from public.queue_entries q where q.organization_id = v_entry.organization_id and q.status = 'SERVING' and q.id <> v_entry.id) then
       raise exception 'Another number is already being served';

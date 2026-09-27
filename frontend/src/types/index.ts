@@ -52,6 +52,13 @@ export type Clinic = {
   contact?: string
   queuePrefix?: string
   announcement?: string
+  announcementsEnabled?: boolean
+  announcementUseCustom?: boolean
+  announcementTemplate?: string
+  announcementServiceArea?: string
+  announcementVoice?: string
+  announcementRate?: number
+  announcementVolume?: number
 }
 
 export type QueueEntry = {

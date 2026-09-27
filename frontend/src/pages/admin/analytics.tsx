@@ -4,37 +4,37 @@ import { PageHeader } from '../../components/ui/page-header'
 import { SimpleBarChart } from '../../components/ui/simple-bar-chart'
 import { StatCard } from '../../components/ui/stat-card'
 import { ErrorState, LoadingState } from '../../components/ui/states'
-import { Button } from '../../components/ui/button'
 import { useAuth } from '../../hooks/use-auth'
-import { usePolling } from '../../hooks/use-polling'
 import { analyticsService } from '../../services/api'
 import { userMessage } from '../../lib/api'
 import { formatWait } from '../../lib/format'
 
-const ranges = [
-  { id: 'today', label: 'Today' },
-  { id: 'week', label: 'This Week' },
-  { id: 'month', label: 'This Month' },
-] as const
-
-type Range = (typeof ranges)[number]['id']
+function localDateValue(date: Date) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
 
 type Analytics = {
   total: number
   completed: number
   cancelled: number
   noShow: number
+  waiting: number
+  serving: number
   averageWaitMinutes: number | null
   averageServiceMinutes: number | null
   hourly: { label: string; value: number }[]
   daily: { label: string; value: number }[]
-  purposes: { label: string; value: number }[]
+  purposes: { label: string; value: number; count: number; percent: number }[]
 }
 
 export function AdminAnalyticsPage() {
   const { user } = useAuth()
   const clinicId = user?.clinic?.identifier
-  const [range, setRange] = useState<Range>('today')
+  const [fromDate, setFromDate] = useState(() => localDateValue(new Date()))
+  const [toDate, setToDate] = useState(() => localDateValue(new Date()))
   const [data, setData] = useState<Analytics | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -49,7 +49,7 @@ export function AdminAnalyticsPage() {
 
     setLoading(true)
     try {
-      const summary = await analyticsService.summary(range, clinicId)
+      const summary = await analyticsService.summary(clinicId, fromDate, toDate)
       setData(summary)
       setError(null)
     } catch (caught) {
@@ -58,15 +58,11 @@ export function AdminAnalyticsPage() {
     } finally {
       setLoading(false)
     }
-  }, [clinicId, range])
+  }, [clinicId, fromDate, toDate])
 
   useEffect(() => {
     void load()
   }, [load])
-
-  usePolling(() => {
-    void load()
-  }, 5000, Boolean(clinicId))
 
   return (
     <div>
@@ -74,17 +70,9 @@ export function AdminAnalyticsPage() {
         title="Analytics"
         description="Queue volume and service times for this clinic."
         actions={
-          <div className="flex rounded-lg border border-border p-1">
-            {ranges.map((item) => (
-              <Button
-                key={item.id}
-                size="sm"
-                variant={range === item.id ? 'default' : 'ghost'}
-                onClick={() => setRange(item.id)}
-              >
-                {item.label}
-              </Button>
-            ))}
+          <div className="flex items-end gap-2">
+            <label className="text-xs text-muted-foreground">From<input aria-label="Analytics start date" className="mt-1 block h-9 rounded-md border border-border bg-input px-2 text-sm text-foreground" type="date" value={fromDate} max={toDate} onChange={(event) => setFromDate(event.target.value)} /></label>
+            <label className="text-xs text-muted-foreground">To<input aria-label="Analytics end date" className="mt-1 block h-9 rounded-md border border-border bg-input px-2 text-sm text-foreground" type="date" value={toDate} min={fromDate} max={localDateValue(new Date())} onChange={(event) => setToDate(event.target.value)} /></label>
           </div>
         }
       />
@@ -94,11 +82,13 @@ export function AdminAnalyticsPage() {
         <ErrorState title="Unable to load analytics." description={error} onRetry={() => void load()} />
       ) : data ? (
         <>
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            <StatCard label="Total queue requests" value={data.total} />
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <StatCard label="Total visitors" value={data.total} />
             <StatCard label="Completed" value={data.completed} />
             <StatCard label="Cancelled" value={data.cancelled} />
             <StatCard label="No show" value={data.noShow} />
+            <StatCard label="Currently waiting" value={data.waiting} />
+            <StatCard label="Currently serving" value={data.serving} />
             <StatCard label="Average waiting time" value={formatWait(data.averageWaitMinutes)} />
             <StatCard label="Average service time" value={formatWait(data.averageServiceMinutes)} />
           </div>
@@ -124,7 +114,17 @@ export function AdminAnalyticsPage() {
                 <CardTitle>Purpose distribution</CardTitle>
               </CardHeader>
               <CardContent>
-                <SimpleBarChart data={data.purposes} />
+                {data.purposes.length ? (
+                  <div className="space-y-3">
+                    {data.purposes.map((item) => (
+                      <div key={item.label} className="grid grid-cols-[minmax(7rem,1fr)_3fr_auto] items-center gap-3 text-sm">
+                        <span className="truncate" title={item.label}>{item.label}</span>
+                        <div className="h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-accent" style={{ width: `${Math.min(100, item.percent)}%` }} /></div>
+                        <span className="font-mono text-xs tabular-nums text-muted-foreground">{item.count} · {item.percent}%</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : <p className="py-10 text-center text-sm text-muted-foreground">No visit purposes in this date range.</p>}
               </CardContent>
             </Card>
           </div>

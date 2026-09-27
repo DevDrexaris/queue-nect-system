@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { toast } from 'sonner'
 import { queueService } from '../../services/api'
 import { userMessage } from '../../lib/api'
 import { readStoredTicket } from '../../lib/ticket'
@@ -11,6 +12,7 @@ import { QueueStatusBadge } from '../../components/ui/queue-status-badge'
 import { ConnectionBanner } from '../../components/ui/connection-banner'
 import { Dialog } from '../../components/ui/dialog'
 import { Button, buttonVariants } from '../../components/ui/button'
+import { QueueEventAnimation } from '../../components/ui/queue-event-animation'
 import { EmptyState, ErrorState, LoadingState } from '../../components/ui/states'
 import { formatElapsedMinutes, formatServiceRange, formatWait } from '../../lib/format'
 import { cn } from '../../lib/utils'
@@ -23,61 +25,38 @@ function headline(entry: QueueEntry) {
   if (entry.status === 'CANCELLED') return entry.cancellationSource === 'ADMIN'
     ? 'Your queue has been cancelled by staff.'
     : 'You have left the queue.'
-  if (entry.status === 'NO_SHOW') return 'Marked as no show.'
+  if (entry.status === 'NO_SHOW') return 'Your queue was closed by staff. Please contact the staff desk if you believe this was done by mistake.'
   return 'Please wait for your number to be called.'
 }
 
-function playQueueCallTone() {
-  if (typeof window === 'undefined') return
+const NOTIFICATION_PREF = 'qn.queue-notifications'
+const SOUND_PREF = 'qn.queue-call-sound'
+const LAST_CALL_KEY = 'qn.last-notified-call'
 
-  const AudioConstructor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-  if (!AudioConstructor) return
-
+function storedPreference(key: string, fallback: boolean) {
   try {
-    const audioContext = new AudioConstructor()
-    const oscillator = audioContext.createOscillator()
-    const gain = audioContext.createGain()
-
-    oscillator.type = 'sine'
-    oscillator.frequency.value = 880
-    gain.gain.value = 0.12
-
-    oscillator.connect(gain)
-    gain.connect(audioContext.destination)
-
-    const start = audioContext.currentTime
-    oscillator.start(start)
-    oscillator.stop(start + 0.35)
-    gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.4)
-
-    void audioContext.resume()
+    const value = window.localStorage.getItem(key)
+    return value === null ? fallback : value === 'true'
   } catch {
-    // Browsers may block autoplay audio until a user gesture occurs; we best-effort play the beep.
+    return fallback
   }
 }
 
-function playQueueCallSequence(times = 5, intervalMs = 220) {
-  for (let index = 0; index < times; index += 1) {
-    window.setTimeout(() => {
-      playQueueCallTone()
-    }, index * intervalMs)
-  }
-}
-
-async function maybeShowQueueNotification(queueNumber: string) {
-  if (typeof window === 'undefined' || !('Notification' in window)) return
-
-  if (Notification.permission === 'default') {
-    await Notification.requestPermission()
-  }
-
-  if (Notification.permission !== 'granted') return
-
-  if (document.visibilityState === 'hidden') {
-    new Notification('Queue-Nect', {
-      body: `Your number ${queueNumber} is now being called.`,
-      tag: 'queue-call',
-    })
+function playQueueCallSequence(context: AudioContext, volume: number) {
+  const start = context.currentTime + 0.03
+  for (let index = 0; index < 5; index += 1) {
+    const oscillator = context.createOscillator()
+    const gain = context.createGain()
+    const toneStart = start + index * 0.48
+    oscillator.type = 'sine'
+    oscillator.frequency.value = index % 2 ? 740 : 880
+    gain.gain.setValueAtTime(0.0001, toneStart)
+    gain.gain.exponentialRampToValueAtTime(Math.max(0.015, volume * 0.11), toneStart + 0.025)
+    gain.gain.exponentialRampToValueAtTime(0.0001, toneStart + 0.34)
+    oscillator.connect(gain)
+    gain.connect(context.destination)
+    oscillator.start(toneStart)
+    oscillator.stop(toneStart + 0.36)
   }
 }
 
@@ -88,11 +67,20 @@ export function QueueStatusPage() {
   const [snapshot, setSnapshot] = useState<QueueSnapshot | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(Boolean(ticket))
-  const [notificationEnabled, setNotificationEnabled] = useState(false)
+  const [notificationEnabled, setNotificationEnabled] = useState(() => storedPreference(NOTIFICATION_PREF, false) && 'Notification' in window && Notification.permission === 'granted')
+  const [soundEnabled, setSoundEnabled] = useState(() => storedPreference(SOUND_PREF, true))
+  const [callAlertOpen, setCallAlertOpen] = useState(false)
   const [canceling, setCanceling] = useState(false)
   const [showCancelPrompt, setShowCancelPrompt] = useState(false)
   const [cancelConfirmed, setCancelConfirmed] = useState(false)
-  const lastCallKeyRef = useRef<string | null>(null)
+  const audioContextRef = useRef<AudioContext | null>(null)
+  const [lastCallKey, setLastCallKey] = useState(() => {
+    try {
+      return sessionStorage.getItem(LAST_CALL_KEY)
+    } catch {
+      return null
+    }
+  })
 
   const load = useCallback(async () => {
     if (!ticket) return
@@ -107,7 +95,7 @@ export function QueueStatusPage() {
     } catch (caught) {
       setEntry(null)
       setSnapshot(null)
-      setError(userMessage(caught))
+      setError(userMessage(caught, 'student'))
     } finally {
       setLoading(false)
     }
@@ -119,36 +107,105 @@ export function QueueStatusPage() {
   }, [load])
   useStudentQueueRealtime(load, Boolean(entry && ['WAITING', 'CALLED', 'SERVING'].includes(entry.status)))
 
-  useEffect(() => {
-    if (typeof window !== 'undefined' && 'Notification' in window) {
-      setNotificationEnabled(Notification.permission === 'granted')
-    }
-  }, [])
-
   async function enableNotifications() {
-    if (typeof window === 'undefined' || !('Notification' in window)) return
-    const permission = await Notification.requestPermission()
-    setNotificationEnabled(permission === 'granted')
+    if (!('Notification' in window)) {
+      toast.error('Browser notifications are not supported here.')
+      return
+    }
+    const permission = Notification.permission === 'default'
+      ? await Notification.requestPermission()
+      : Notification.permission
+    const enabled = permission === 'granted'
+    setNotificationEnabled(enabled)
+    localStorage.setItem(NOTIFICATION_PREF, String(enabled))
+    if (!enabled) {
+      toast.error(permission === 'denied' ? 'Notifications are blocked in browser settings.' : 'Notifications could not be enabled.')
+      return
+    }
+    await enableWebPush()
+  }
+
+  function setNotificationPreference(enabled: boolean) {
+    if (!enabled) {
+      setNotificationEnabled(false)
+      localStorage.setItem(NOTIFICATION_PREF, 'false')
+      return
+    }
+    void enableNotifications()
+  }
+
+  async function unlockAudio() {
+    if (audioContextRef.current) {
+      await audioContextRef.current.resume()
+      return audioContextRef.current
+    }
+    const AudioConstructor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    if (!AudioConstructor) return null
+    audioContextRef.current = new AudioConstructor()
+    await audioContextRef.current.resume()
+    return audioContextRef.current
+  }
+
+  async function enableWebPush() {
+    const publicKey = import.meta.env.VITE_WEB_PUSH_PUBLIC_KEY as string | undefined
+    if (!('serviceWorker' in navigator)) return
+    try {
+      const registration = await navigator.serviceWorker.register('/sw.js')
+      if (!publicKey || !('PushManager' in window) || !ticket?.statusToken) return
+      const applicationServerKey = Uint8Array.from(atob(publicKey.replace(/-/g, '+').replace(/_/g, '/')), (char) => char.charCodeAt(0))
+      const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey })
+      const keys = subscription.toJSON().keys
+      if (!keys?.p256dh || !keys.auth) return
+      const { error: saveError } = await import('../../lib/supabase').then(({ supabaseAnon }) =>
+        supabaseAnon.rpc('save_student_push_subscription', {
+          p_status_token: ticket.statusToken,
+          p_endpoint: subscription.endpoint,
+          p_p256dh: keys.p256dh,
+          p_auth: keys.auth,
+        }),
+      )
+      if (saveError) throw saveError
+    } catch (caught) {
+      console.error('[Queue-Nect] Push setup failed:', caught)
+      toast.error('Background notifications could not be set up on this device.')
+    }
+  }
+
+  async function testCallAlert() {
+    setCallAlertOpen(true)
+    const context = await unlockAudio()
+    if (context && soundEnabled) playQueueCallSequence(context, 0.6)
+    if (notificationEnabled && 'Notification' in window && Notification.permission === 'granted') {
+      const notification = new Notification("Queue-Nect — You're being called", {
+        body: `Queue ${entry?.queueNumber ?? ticket?.queueNumber} is now being called. Please proceed to the service area.`,
+        icon: '/favicon.svg',
+        tag: 'queue-call-test',
+      })
+      notification.onclick = () => { window.focus(); window.location.assign('/queue/status') }
+    }
   }
 
   useEffect(() => {
+    if (entry && entry.status !== 'CALLED') setCallAlertOpen(false)
     if (!entry || entry.status !== 'CALLED') return
 
     const callKey = `${entry.id}:${entry.calledAt ?? 'unknown'}`
-    if (lastCallKeyRef.current === callKey) return
+    if (lastCallKey === callKey) return
 
-    lastCallKeyRef.current = callKey
-    playQueueCallSequence(5, 220)
+    setLastCallKey(callKey)
+    try { sessionStorage.setItem(LAST_CALL_KEY, callKey) } catch { /* Session storage may be blocked. */ }
+    setCallAlertOpen(true)
 
-    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
-      void maybeShowQueueNotification(entry.queueNumber)
-      return
+    if (soundEnabled && audioContextRef.current?.state === 'running') playQueueCallSequence(audioContextRef.current, 1)
+    if (notificationEnabled && 'Notification' in window && Notification.permission === 'granted') {
+      const notification = new Notification("Queue-Nect — You're being called", {
+        body: `Queue ${entry.queueNumber} is now being called. Please proceed to the service area.`,
+        icon: '/favicon.svg',
+        tag: `queue-call-${entry.id}`,
+      })
+      notification.onclick = () => { window.focus(); window.location.assign('/queue/status') }
     }
-
-    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
-      void maybeShowQueueNotification(entry.queueNumber)
-    }
-  }, [entry])
+  }, [entry, lastCallKey, notificationEnabled, soundEnabled])
 
   async function cancelQueue() {
     if (!ticket || !entry) return
@@ -159,7 +216,7 @@ export function QueueStatusPage() {
       setCancelConfirmed(false)
       await load()
     } catch (caught) {
-      setError(userMessage(caught))
+      setError(userMessage(caught, 'student'))
     } finally {
       setCanceling(false)
     }
@@ -209,6 +266,17 @@ export function QueueStatusPage() {
   return (
     <div className="space-y-5">
       {!online ? <ConnectionBanner /> : null}
+      {callAlertOpen && entry.status === 'CALLED' ? (
+        <section role="alertdialog" aria-label="Your turn" className="relative isolate overflow-hidden rounded-xl border border-status-calling/35 bg-status-calling/10 p-5 text-center">
+          <QueueEventAnimation kind="called" />
+          <div className="relative z-10">
+            <p className="text-xs font-semibold tracking-[0.2em] text-status-calling uppercase">Your turn</p>
+            <QueueNumber value={entry.queueNumber} size="lg" className="queue-number-calling mt-2" />
+            <p className="mt-2 text-sm text-foreground">Please proceed to the service area.</p>
+            <Button className="mt-4" variant="outline" onClick={() => setCallAlertOpen(false)}>Got it</Button>
+          </div>
+        </section>
+      ) : null}
       <div
         className={cn(
           'rounded-xl border p-5 text-center',
@@ -257,22 +325,22 @@ export function QueueStatusPage() {
           <div className="col-span-2">
             <p className="text-xs text-muted-foreground uppercase">Status</p>
             <div className="mt-2">
-              <QueueStatusBadge status={entry.status} />
+              <QueueStatusBadge status={entry.status} label={entry.status === 'NO_SHOW' ? 'Queue closed' : undefined} />
             </div>
-            {'Notification' in window ? (
-              <button
-                type="button"
-                onClick={() => void enableNotifications()}
-                className={cn(
-                  'mt-3 inline-flex items-center justify-center rounded-md border px-3 py-2 text-xs font-medium transition-colors',
-                  notificationEnabled
-                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                    : 'border-border bg-muted text-foreground hover:bg-muted/80',
-                )}
-              >
-                {notificationEnabled ? 'Notifications enabled' : 'Enable notifications'}
-              </button>
-            ) : null}
+            <div className="mt-4 grid gap-3 rounded-lg border border-border bg-surface p-3 sm:grid-cols-2">
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={notificationEnabled} onChange={(event) => setNotificationPreference(event.target.checked)} />
+                Queue notifications
+              </label>
+              <label className="flex items-center gap-2 text-sm">
+                <input type="checkbox" checked={soundEnabled} onChange={(event) => { setSoundEnabled(event.target.checked); localStorage.setItem(SOUND_PREF, String(event.target.checked)) }} />
+                Call sound
+              </label>
+              <Button type="button" variant="outline" size="sm" className="sm:col-span-2" onClick={() => void testCallAlert()}>Test alert</Button>
+              <p className="text-xs text-muted-foreground sm:col-span-2">
+                Sound plays while this page is active. Background push requires browser support and organization setup.
+              </p>
+            </div>
           </div>
         </CardContent>
       </Card>

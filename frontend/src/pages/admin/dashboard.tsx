@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/ca
 import { PageHeader } from '../../components/ui/page-header'
 import { QueueNumber } from '../../components/ui/queue-number'
 import { QueueStatusBadge } from '../../components/ui/queue-status-badge'
+import { QueueActionDialog, type ConfirmedQueueAction } from '../../components/ui/queue-action-dialog'
 import { StatCard } from '../../components/ui/stat-card'
 import { EmptyState, ErrorState, LoadingState } from '../../components/ui/states'
 import { ActionItem, ActionMenu } from '../../components/ui/action-menu'
@@ -22,6 +23,7 @@ export function AdminDashboardPage() {
   const clinicId = user?.clinic?.identifier
   const { data, error, loading, reload } = useQueueSnapshot(clinicId, 8000)
   const [calling, setCalling] = useState(false)
+  const [pendingAction, setPendingAction] = useState<{ entry: QueueEntry; action: ConfirmedQueueAction } | null>(null)
 
   const today = data?.entries ?? []
 
@@ -53,10 +55,11 @@ export function AdminDashboardPage() {
     }
   }
 
-  async function act(entry: QueueEntry, action: 'complete' | 'skip' | 'cancel') {
+  async function act(entry: QueueEntry, action: 'serve' | 'complete' | 'skip' | 'cancel' | 'return_to_waiting') {
     try {
       await queueService.updateStatus(entry.id, action)
       toast.success(`Updated ${entry.queueNumber}`)
+      setPendingAction(null)
       await reload()
     } catch (caught) {
       toast.error(userMessage(caught))
@@ -123,7 +126,7 @@ export function AdminDashboardPage() {
       <div className="mt-6 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <Card>
           <CardHeader>
-            <CardTitle>Currently serving</CardTitle>
+            <CardTitle>{serving?.status === 'CALLED' ? 'Currently called' : 'Currently serving'}</CardTitle>
           </CardHeader>
           <CardContent>
             {serving ? (
@@ -146,9 +149,11 @@ export function AdminDashboardPage() {
                 <p className="mt-2 text-sm font-medium">{serving.studentName}</p>
                 <p className="text-sm text-muted-foreground">{serving.purpose}</p>
                 <div className="mt-4 flex flex-wrap gap-2">
+                  {serving.status === 'CALLED' ? <Button onClick={() => void act(serving, 'serve')}>Serve</Button> : null}
+                  {serving.status === 'CALLED' ? <Button variant="outline" onClick={() => void act(serving, 'return_to_waiting')}>Return to waiting</Button> : null}
                   {serving.status === 'SERVING' ? <Button onClick={() => void act(serving, 'complete')}>Finish service</Button> : null}
-                  {serving.status === 'SERVING' ? <Button variant="destructive" onClick={() => void act(serving, 'cancel')}>Cancel queue</Button> : null}
-                  {serving.status === 'CALLED' ? <Button variant="outline" onClick={() => void act(serving, 'skip')}>Mark no-show</Button> : null}
+                  {['CALLED', 'SERVING'].includes(serving.status) ? <Button variant="destructive" onClick={() => setPendingAction({ entry: serving, action: 'cancel' })}>Cancel queue</Button> : null}
+                  {serving.status === 'CALLED' ? <Button variant="outline" onClick={() => setPendingAction({ entry: serving, action: 'skip' })}>Mark as no-show</Button> : null}
                 </div>
               </div>
             ) : (
@@ -213,10 +218,11 @@ export function AdminDashboardPage() {
                             {item.status === 'WAITING' ? (
                               <ActionItem onClick={() => void queueService.updateStatus(item.id, 'call').then(reload)}>Call</ActionItem>
                             ) : null}
-                            {item.status === 'CALLED' ? <ActionItem onClick={() => void queueService.updateStatus(item.id, 'serve').then(reload)}>Start service</ActionItem> : null}
+                            {item.status === 'CALLED' ? <ActionItem onClick={() => void queueService.updateStatus(item.id, 'serve').then(reload)}>Serve</ActionItem> : null}
+                            {item.status === 'CALLED' ? <ActionItem onClick={() => void act(item, 'return_to_waiting')}>Return to waiting</ActionItem> : null}
                             {item.status === 'SERVING' ? <ActionItem onClick={() => void act(item, 'complete')}>Complete service</ActionItem> : null}
-                            {['WAITING', 'CALLED'].includes(item.status) ? <ActionItem onClick={() => void act(item, 'skip')}>Mark no-show</ActionItem> : null}
-                            {['WAITING', 'CALLED', 'SERVING'].includes(item.status) ? <ActionItem destructive onClick={() => void act(item, 'cancel')}>Cancel queue</ActionItem> : null}
+                            {['WAITING', 'CALLED'].includes(item.status) ? <ActionItem onClick={() => setPendingAction({ entry: item, action: 'skip' })}>Mark as no-show</ActionItem> : null}
+                            {['WAITING', 'CALLED', 'SERVING'].includes(item.status) ? <ActionItem destructive onClick={() => setPendingAction({ entry: item, action: 'cancel' })}>Cancel queue</ActionItem> : null}
                           </ActionMenu>
                         </TD>
                       </TR>
@@ -240,6 +246,13 @@ export function AdminDashboardPage() {
           )}
         </CardContent>
       </Card>
+      <QueueActionDialog
+        entry={pendingAction?.entry ?? null}
+        action={pendingAction?.action ?? null}
+        busy={calling}
+        onClose={() => setPendingAction(null)}
+        onConfirm={(entry, action) => void act(entry, action)}
+      />
     </div>
   )
 }

@@ -7,6 +7,7 @@ import { PageHeader } from '../../components/ui/page-header'
 import { QueueNumber } from '../../components/ui/queue-number'
 import { QueueStatusBadge } from '../../components/ui/queue-status-badge'
 import { QueuePresenceBadge } from '../../components/ui/queue-presence-badge'
+import { QueueActionDialog, type ConfirmedQueueAction } from '../../components/ui/queue-action-dialog'
 import { SearchInput } from '../../components/ui/search-input'
 import { Select } from '../../components/ui/select'
 import { EmptyState, ErrorState, LoadingState } from '../../components/ui/states'
@@ -30,6 +31,7 @@ export function AdminQueuePage() {
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<string>('all')
   const [pending, setPending] = useState<QueueEntry | null>(null)
+  const [pendingAction, setPendingAction] = useState<ConfirmedQueueAction | null>(null)
   const [resetting, setResetting] = useState(false)
   const [resetPending, setResetPending] = useState(false)
   const [resetConfirmed, setResetConfirmed] = useState(false)
@@ -75,10 +77,20 @@ export function AdminQueuePage() {
       await queueService.updateStatus(entry.id, action)
       toast.success(`Updated ${entry.queueNumber}`)
       setPending(null)
+      setPendingAction(null)
       await reload()
     } catch (caught) {
       toast.error(userMessage(caught))
     }
+  }
+
+  function confirmQueueAction(entry: QueueEntry, action: ConfirmedQueueAction) {
+    void run(action, entry)
+  }
+
+  function requestQueueAction(entry: QueueEntry, action: ConfirmedQueueAction) {
+    setPending(entry)
+    setPendingAction(action)
   }
 
   async function resetQueue() {
@@ -149,7 +161,7 @@ export function AdminQueuePage() {
 
       <Card className="mb-6">
         <CardHeader>
-          <CardTitle>Currently serving</CardTitle>
+          <CardTitle>{serving?.status === 'CALLED' ? 'Currently called' : 'Currently serving'}</CardTitle>
         </CardHeader>
         <CardContent>
           {serving ? (
@@ -176,8 +188,10 @@ export function AdminQueuePage() {
                 <p className="mt-1 text-xs text-muted-foreground">Started: {formatTime(serving.calledAt)}</p>
               </div>
               <div className="flex flex-wrap gap-2">
+                {serving.status === 'CALLED' ? <Button onClick={() => void run('serve', serving)}>Serve</Button> : null}
                 {serving.status === 'SERVING' ? <Button onClick={() => void run('complete', serving)}>Finish service</Button> : null}
-                {serving.status === 'CALLED' ? <Button variant="outline" onClick={() => void run('skip', serving)}>Mark no-show</Button> : null}
+                {['CALLED', 'SERVING'].includes(serving.status) ? <Button variant="outline" onClick={() => requestQueueAction(serving, 'cancel')}>Cancel</Button> : null}
+                {['WAITING', 'CALLED'].includes(serving.status) ? <Button variant="outline" onClick={() => requestQueueAction(serving, 'skip')}>Mark as no-show</Button> : null}
               </div>
               </div>
             </div>
@@ -250,10 +264,8 @@ export function AdminQueuePage() {
                         ) : null}
                         {item.status === 'CALLED' ? <ActionItem onClick={() => void run('serve', item)}>Start service</ActionItem> : null}
                         {item.status === 'SERVING' ? <ActionItem onClick={() => void run('complete', item)}>Complete service</ActionItem> : null}
-                        {['WAITING', 'CALLED'].includes(item.status) ? <ActionItem onClick={() => void run('skip', item)}>Mark no-show</ActionItem> : null}
-                        {['WAITING', 'CALLED', 'SERVING'].includes(item.status) ? (
-                          <ActionItem destructive onClick={() => setPending(item)}>Cancel</ActionItem>
-                        ) : null}
+                        {['WAITING', 'CALLED'].includes(item.status) ? <ActionItem onClick={() => requestQueueAction(item, 'skip')}>Mark as no-show</ActionItem> : null}
+                        {['WAITING', 'CALLED', 'SERVING'].includes(item.status) ? <ActionItem destructive onClick={() => requestQueueAction(item, 'cancel')}>Cancel queue</ActionItem> : null}
                       </ActionMenu>
                     </TD>
                   </TR>
@@ -272,10 +284,8 @@ export function AdminQueuePage() {
                     ) : null}
                     {item.status === 'CALLED' ? <ActionItem onClick={() => void run('serve', item)}>Start service</ActionItem> : null}
                     {item.status === 'SERVING' ? <ActionItem onClick={() => void run('complete', item)}>Complete service</ActionItem> : null}
-                    {['WAITING', 'CALLED'].includes(item.status) ? <ActionItem onClick={() => void run('skip', item)}>Mark no-show</ActionItem> : null}
-                    {['WAITING', 'CALLED', 'SERVING'].includes(item.status) ? (
-                      <ActionItem destructive onClick={() => setPending(item)}>Cancel</ActionItem>
-                    ) : null}
+                    {['WAITING', 'CALLED'].includes(item.status) ? <ActionItem onClick={() => requestQueueAction(item, 'skip')}>Mark as no-show</ActionItem> : null}
+                    {['WAITING', 'CALLED', 'SERVING'].includes(item.status) ? <ActionItem destructive onClick={() => requestQueueAction(item, 'cancel')}>Cancel queue</ActionItem> : null}
                   </ActionMenu>
                 </div>
                 <p className="mt-2 font-medium">{item.studentName}</p>
@@ -291,25 +301,12 @@ export function AdminQueuePage() {
         </>
       )}
 
-      <Dialog
-        open={Boolean(pending)}
-        onClose={() => setPending(null)}
-        title="Cancel this queue?"
-        description={
-          pending
-            ? `${pending.queueNumber} will be cancelled and retained in queue history. It cannot be restored.`
-            : undefined
-        }
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setPending(null)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={() => pending && void run('cancel', pending)}>
-              Confirm
-            </Button>
-          </>
-        }
+      <QueueActionDialog
+        entry={pending}
+        action={pendingAction}
+        busy={calling}
+        onClose={() => { setPending(null); setPendingAction(null) }}
+        onConfirm={confirmQueueAction}
       />
 
       <Dialog

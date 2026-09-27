@@ -43,7 +43,7 @@ const config: Record<
   },
 }
 
-export function QueueStatusBadge({ status, className }: { status: QueueStatus; className?: string }) {
+export function QueueStatusBadge({ status, className, label }: { status: QueueStatus; className?: string; label?: string }) {
   const item = config[status]
   const Icon = item.icon
   return (
@@ -55,7 +55,7 @@ export function QueueStatusBadge({ status, className }: { status: QueueStatus; c
       )}
     >
       <Icon className="size-3.5" aria-hidden="true" />
-      {item.label}
+      {label ?? item.label}
     </span>
   )
 }

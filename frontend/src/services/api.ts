@@ -38,7 +38,14 @@ function safeSessionUser(profile: any, user?: any): SessionUser {
         address: org.address ?? '',
         contact: org.contact_information ?? '',
         queuePrefix: org.queue_prefix ?? 'A',
-        announcement: '',
+        announcement: org.announcement_template ?? '',
+        announcementsEnabled: org.announcements_enabled ?? true,
+        announcementUseCustom: org.announcement_use_custom ?? false,
+        announcementTemplate: org.announcement_template ?? 'Queue {queue_number}, please proceed to {service_area}.',
+        announcementServiceArea: org.announcement_service_area ?? 'the service desk',
+        announcementVoice: org.announcement_voice ?? '',
+        announcementRate: Number(org.announcement_rate ?? 0.95),
+        announcementVolume: Number(org.announcement_volume ?? 1),
       }
     : undefined
 
@@ -54,7 +61,7 @@ function safeSessionUser(profile: any, user?: any): SessionUser {
 async function getProfileByUserId(userId: string) {
   const { data, error } = await supabase
     .from('profiles')
-    .select('*, organizations!organization_id(name, public_identifier, queue_prefix, address, contact_information, is_active)')
+    .select('*, organizations!organization_id(name, public_identifier, queue_prefix, address, contact_information, is_active, announcements_enabled, announcement_use_custom, announcement_template, announcement_service_area, announcement_voice, announcement_rate, announcement_volume)')
     .eq('id', userId)
     .maybeSingle()
 
@@ -387,7 +394,7 @@ export const queueService = {
     const client = await getQueueClient()
     const entriesQuery = client === supabase
       ? client.from('queue_entries').select('*').eq('organization_id', org.id)
-      : client.from('public_queue_snapshot').select('*').eq('organization_id', org.id)
+      : client.from('public_queue_snapshot').select('*').eq('public_identifier', clinicIdentifier)
     const { data: entries, error } = await entriesQuery.order('joined_at', { ascending: true })
 
     if (error) throw error
@@ -397,8 +404,8 @@ export const queueService = {
       const estimatedWaitMinutes = ['WAITING', 'CALLED'].includes(entry.status) ? getElapsedMinutes(entry.joined_at) : null
 
       return {
-        id: entry.id,
-        clinicId: org.id,
+        id: 'id' in entry ? entry.id : entry.queue_number,
+        clinicId: 'organization_id' in entry ? entry.organization_id : '',
         queueNumber: entry.queue_number,
         studentId: 'student_id' in entry ? entry.student_id : undefined,
         studentName: 'full_name' in entry ? entry.full_name : undefined,
@@ -431,6 +438,14 @@ export const queueService = {
         address: org.address ?? '',
         contact: org.contact_information ?? '',
         queuePrefix: org.queue_prefix,
+        announcement: org.announcement_template ?? '',
+        announcementsEnabled: org.announcements_enabled ?? true,
+        announcementUseCustom: org.announcement_use_custom ?? false,
+        announcementTemplate: org.announcement_template ?? 'Queue {queue_number}, please proceed to {service_area}.',
+        announcementServiceArea: org.announcement_service_area ?? 'the service desk',
+        announcementVoice: org.announcement_voice ?? '',
+        announcementRate: Number(org.announcement_rate ?? 0.95),
+        announcementVolume: Number(org.announcement_volume ?? 1),
       },
       nowServing,
       upNext,
@@ -581,7 +596,7 @@ export const queueService = {
     return { queueSessionId: session.id, queuePrefix: org.queue_prefix, cancelledEntries: data }
   },
 
-  updateStatus: async (queueId: string, action: 'call' | 'serve' | 'complete' | 'skip' | 'cancel') => {
+  updateStatus: async (queueId: string, action: 'call' | 'serve' | 'complete' | 'skip' | 'cancel' | 'return_to_waiting') => {
     const { data, error } = await supabase.rpc('transition_queue_entry', {
       p_queue_entry_id: queueId,
       p_action: action,
@@ -623,7 +638,14 @@ export const clinicService = {
       address: data.address ?? '',
       contact: data.contact_information ?? '',
       queuePrefix: data.queue_prefix,
-      announcement: '',
+      announcement: data.announcement_template ?? '',
+      announcementsEnabled: data.announcements_enabled ?? true,
+      announcementUseCustom: data.announcement_use_custom ?? false,
+      announcementTemplate: data.announcement_template ?? 'Queue {queue_number}, please proceed to {service_area}.',
+      announcementServiceArea: data.announcement_service_area ?? 'the service desk',
+      announcementVoice: data.announcement_voice ?? '',
+      announcementRate: Number(data.announcement_rate ?? 0.95),
+      announcementVolume: Number(data.announcement_volume ?? 1),
     }
   },
   update: async (payload: Partial<Clinic>) => {
@@ -643,6 +665,13 @@ export const clinicService = {
         address: payload.address ?? undefined,
         contact_information: payload.contact ?? undefined,
         queue_prefix: payload.queuePrefix ?? undefined,
+        announcements_enabled: payload.announcementsEnabled ?? undefined,
+        announcement_use_custom: payload.announcementUseCustom ?? undefined,
+        announcement_template: payload.announcementTemplate ?? undefined,
+        announcement_service_area: payload.announcementServiceArea ?? undefined,
+        announcement_voice: payload.announcementVoice ?? undefined,
+        announcement_rate: payload.announcementRate ?? undefined,
+        announcement_volume: payload.announcementVolume ?? undefined,
       })
       .eq('id', profile.organization_id)
       .select('*')
@@ -658,7 +687,14 @@ export const clinicService = {
       address: data.address ?? '',
       contact: data.contact_information ?? '',
       queuePrefix: data.queue_prefix,
-      announcement: '',
+      announcement: data.announcement_template ?? '',
+      announcementsEnabled: data.announcements_enabled ?? true,
+      announcementUseCustom: data.announcement_use_custom ?? false,
+      announcementTemplate: data.announcement_template ?? 'Queue {queue_number}, please proceed to {service_area}.',
+      announcementServiceArea: data.announcement_service_area ?? 'the service desk',
+      announcementVoice: data.announcement_voice ?? '',
+      announcementRate: Number(data.announcement_rate ?? 0.95),
+      announcementVolume: Number(data.announcement_volume ?? 1),
     }
   },
 }
@@ -760,98 +796,30 @@ export const historyService = {
 }
 
 export const analyticsService = {
-  summary: async (range: string, clinicIdentifier?: string) => {
-    let query = supabase.from('queue_entries').select('*')
+  summary: async (clinicIdentifier: string, from: string, to: string) => {
+    const { data: org, error: orgError } = await getOrgIdFromClinicIdentifier(clinicIdentifier)
+    if (orgError) throw orgError
+    if (!org) throw new Error('Clinic not found.')
 
-    if (clinicIdentifier) {
-      const { data: org, error: orgError } = await getOrgIdFromClinicIdentifier(clinicIdentifier)
-      if (orgError) throw orgError
-      if (!org) throw new Error('Clinic not found.')
-      query = query.eq('organization_id', org.id)
-    }
-
-    const { data, error } = await query
+    const { data, error } = await supabase.rpc('get_organization_analytics', {
+      p_organization_id: org.id,
+      p_from: from,
+      p_to: to,
+    })
     if (error) throw error
 
-    const entries = (data ?? []).filter((entry) => {
-      if (!entry.joined_at) return false
-      const time = new Date(entry.joined_at).getTime()
-      const now = Date.now()
-      const dayMs = 24 * 60 * 60 * 1000
-
-      if (range === 'today') {
-        return time >= new Date(now).setHours(0, 0, 0, 0)
-      }
-      if (range === 'week') {
-        return time >= now - 7 * dayMs
-      }
-      return time >= now - 30 * dayMs
-    })
-
-    const toMinutes = (from?: string | null, to?: string | null) => {
-      if (!from || !to) return null
-      const diff = new Date(to).getTime() - new Date(from).getTime()
-      if (Number.isNaN(diff) || diff < 0) return null
-      return Math.round(diff / 60000)
-    }
-
-    const waitValues = entries
-      .map((entry) => toMinutes(entry.joined_at, entry.called_at ?? entry.started_at ?? entry.completed_at))
-      .filter((value): value is number => typeof value === 'number')
-
-    const serviceValues = entries
-      .map((entry) => toMinutes(entry.started_at, entry.completed_at))
-      .filter((value): value is number => typeof value === 'number')
-
-    const hourlyBuckets = Array.from({ length: 6 }, (_, index) => ({
-      label: `${index * 4}:00`,
-      value: 0,
-    }))
-
-    entries.forEach((entry) => {
-      if (!entry.joined_at) return
-      const date = new Date(entry.joined_at)
-      const hourBucket = Math.min(5, Math.floor(date.getHours() / 4))
-      hourlyBuckets[hourBucket].value += 1
-    })
-
-    const dailyLabels = Array.from({ length: range === 'today' ? 6 : range === 'week' ? 7 : 6 }, (_, index) => {
-      const date = new Date()
-      date.setHours(0, 0, 0, 0)
-      date.setDate(date.getDate() - (range === 'week' ? 6 - index : 5 - index))
-      return date.toLocaleDateString([], { month: 'short', day: 'numeric' })
-    })
-
-    const dailyBuckets = dailyLabels.map((label) => ({ label, value: 0 }))
-    entries.forEach((entry) => {
-      if (!entry.joined_at) return
-      const date = new Date(entry.joined_at)
-      const key = date.toLocaleDateString([], { month: 'short', day: 'numeric' })
-      const bucket = dailyBuckets.findIndex((item) => item.label === key)
-      if (bucket >= 0) dailyBuckets[bucket].value += 1
-    })
-
-    const purposeBuckets = new Map<string, number>()
-    entries.forEach((entry) => {
-      const key = entry.purpose || 'General'
-      purposeBuckets.set(key, (purposeBuckets.get(key) ?? 0) + 1)
-    })
-
-    const purposes = Array.from(purposeBuckets.entries())
-      .map(([label, value]) => ({ label, value }))
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 6)
-
     return {
-      total: entries.length,
-      completed: entries.filter((entry) => entry.status === 'COMPLETED').length,
-      cancelled: entries.filter((entry) => entry.status === 'CANCELLED').length,
-      noShow: entries.filter((entry) => entry.status === 'NO_SHOW').length,
-      averageWaitMinutes: waitValues.length > 0 ? Math.round(waitValues.reduce((sum, value) => sum + value, 0) / waitValues.length) : null,
-      averageServiceMinutes: serviceValues.length > 0 ? Math.round(serviceValues.reduce((sum, value) => sum + value, 0) / serviceValues.length) : null,
-      hourly: hourlyBuckets,
-      daily: dailyBuckets,
-      purposes,
+      total: data.total as number,
+      completed: data.completed as number,
+      cancelled: data.cancelled as number,
+      noShow: data.noShow as number,
+      waiting: data.waiting as number,
+      serving: data.serving as number,
+      averageWaitMinutes: data.averageWaitMinutes as number | null,
+      averageServiceMinutes: data.averageServiceMinutes as number | null,
+      hourly: (data.hourly as { hour: number; value: number }[]).map((item) => ({ label: `${String(item.hour).padStart(2, '0')}:00`, value: item.value })),
+      daily: (data.daily as { date: string; value: number }[]).map((item) => ({ label: new Date(`${item.date}T12:00:00`).toLocaleDateString([], { month: 'short', day: 'numeric' }), value: item.value })),
+      purposes: (data.purposes as { label: string; count: number; percent: number }[]).map((item) => ({ ...item, value: item.count })),
     }
   },
 }
