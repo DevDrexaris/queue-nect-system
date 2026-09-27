@@ -298,6 +298,14 @@ on public.queue_sessions
 for insert
 with check (
   public.is_super_admin() or public.is_org_admin(organization_id)
+  or (
+    exists (
+      select 1
+      from public.organizations o
+      where o.id = organization_id
+        and o.is_active = true
+    )
+  )
 );
 
 create policy "Staff can update queue sessions for their org"
@@ -342,6 +350,8 @@ with check (
     where o.id = organization_id
       and o.is_active = true
   )
+  or public.is_super_admin()
+  or public.is_org_admin(organization_id)
 );
 
 create policy "Org staff can manage org queue entries"
