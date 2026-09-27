@@ -15,9 +15,17 @@ type RequestOptions = RequestInit & {
 }
 
 export async function apiRequest<T>(_path: string, _options: RequestOptions = {}): Promise<T> {
-  throw new ApiError(DEFAULT_USER_MESSAGE, 410)
+  throw new ApiError('The queue service is unavailable right now. Please try again later.', 503)
 }
 
-export function userMessage(_error: unknown) {
+export function userMessage(error: unknown) {
+  if (error instanceof Error && error.message) return error.message
+  if (typeof error === 'string' && error.trim()) return error
+  if (error && typeof error === 'object') {
+    const message = (error as { message?: string; details?: string }).message
+    const details = (error as { details?: string }).details
+    if (message) return message
+    if (details) return details
+  }
   return DEFAULT_USER_MESSAGE
 }

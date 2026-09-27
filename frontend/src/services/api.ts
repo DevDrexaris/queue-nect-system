@@ -67,6 +67,11 @@ function generateSecureQrToken(length = 32) {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('').slice(0, length)
 }
 
+async function getQueueClient() {
+  const { data: { session } } = await supabase.auth.getSession()
+  return session ? supabase : supabaseAnon
+}
+
 function getOrgIdFromClinicIdentifier(clinicIdentifier: string) {
   return supabaseAnon.from('organizations').select('*').eq('public_identifier', clinicIdentifier).maybeSingle()
 }
@@ -225,7 +230,8 @@ export const queueService = {
       }
     }
 
-    const { data: entries, error } = await supabaseAnon
+    const client = await getQueueClient()
+    const { data: entries, error } = await client
       .from('queue_entries')
       .select('*')
       .eq('organization_id', org.id)
@@ -280,7 +286,8 @@ export const queueService = {
     const { data: org } = await getOrgIdFromClinicIdentifier(clinicIdentifier)
     if (!org) throw new Error('Clinic not found.')
 
-    const { data, error } = await supabaseAnon
+    const client = await getQueueClient()
+    const { data, error } = await client
       .from('queue_entries')
       .select('*')
       .eq('organization_id', org.id)
