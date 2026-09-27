@@ -552,6 +552,33 @@ export const superAdminService = {
 
     return { organizations }
   },
+  updateOrganization: async (id: string, payload: Record<string, string>): Promise<Organization> => {
+    const { data, error } = await supabase
+      .from('organizations')
+      .update({
+        name: payload.name ?? payload.schoolName ?? undefined,
+        public_identifier: payload.public_identifier ?? payload.clinicIdentifier ?? undefined,
+        queue_prefix: payload.queue_prefix ?? payload.queuePrefix ?? undefined,
+        address: payload.address ?? undefined,
+        contact_information: payload.contact_information ?? payload.contact ?? undefined,
+        is_active: payload.is_active ? payload.is_active === 'true' : undefined,
+      })
+      .eq('id', id)
+      .select('*')
+      .single()
+
+    if (error) throw error
+
+    return {
+      id: data.id,
+      schoolName: data.name,
+      clinicName: data.name,
+      clinicIdentifier: data.public_identifier,
+      adminName: undefined,
+      status: data.is_active ? 'active' : 'disabled',
+      createdAt: data.created_at,
+    }
+  },
   createOrganization: async (payload: Record<string, string>): Promise<Organization> => {
     const { data, error } = await supabase.from('organizations').insert({
       name: payload.name ?? payload.schoolName ?? 'Clinic',
@@ -577,6 +604,32 @@ export const superAdminService = {
   },
   administrators: async (): Promise<{ users: AdminAccount[] }> => {
     return adminUsersService.list()
+  },
+  updateAdmin: async (id: string, payload: Record<string, string>): Promise<AdminAccount> => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({
+        full_name: payload.name ?? undefined,
+        email: payload.email ?? undefined,
+        role: (payload.role ?? 'ADMIN') as UserRole,
+        organization_id: payload.organizationId ?? null,
+        is_active: payload.is_active ? payload.is_active === 'true' : undefined,
+      })
+      .eq('id', id)
+      .select('*')
+      .single()
+
+    if (error) throw error
+
+    return {
+      id: data.id,
+      name: data.full_name,
+      email: data.email,
+      role: mapRole(data.role),
+      organizationId: data.organization_id ?? undefined,
+      clinicName: undefined,
+      status: data.is_active ? 'active' : 'disabled',
+    }
   },
   createAdmin: async (payload: Record<string, string>): Promise<AdminAccount> => {
     const name = payload.name ?? payload.fullName ?? 'New Administrator'

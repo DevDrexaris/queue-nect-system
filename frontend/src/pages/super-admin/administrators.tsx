@@ -25,6 +25,7 @@ export function SuperAdminAdministratorsPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
+  const [editingUser, setEditingUser] = useState<AdminAccount | null>(null)
   const form = useForm<Values>({
     resolver: zodResolver(createAdminSchema),
     defaultValues: { role: 'ADMIN', name: '', email: '', temporaryPassword: '', organizationId: '' },
@@ -49,11 +50,40 @@ export function SuperAdminAdministratorsPage() {
     void load()
   }, [])
 
+  function openCreate() {
+    setEditingUser(null)
+    form.reset({ role: 'ADMIN', name: '', email: '', temporaryPassword: '', organizationId: '' })
+    setOpen(true)
+  }
+
+  function openEdit(item: AdminAccount) {
+    setEditingUser(item)
+    form.reset({
+      role: 'ADMIN',
+      name: item.name,
+      email: item.email,
+      temporaryPassword: '',
+      organizationId: item.organizationId ?? '',
+    })
+    setOpen(true)
+  }
+
   async function onSubmit(values: Values) {
     try {
-      await superAdminService.createAdmin(values)
-      toast.success('Administrator created. They should change their password after signing in.')
+      if (editingUser) {
+        await superAdminService.updateAdmin(editingUser.id, {
+          name: values.name,
+          email: values.email,
+          role: values.role,
+          organizationId: values.organizationId,
+        })
+        toast.success('Administrator updated.')
+      } else {
+        await superAdminService.createAdmin(values)
+        toast.success('Administrator created. They should change their password after signing in.')
+      }
       setOpen(false)
+      setEditingUser(null)
       form.reset({ role: 'ADMIN' })
       await load()
     } catch (caught) {
@@ -63,7 +93,7 @@ export function SuperAdminAdministratorsPage() {
 
   return (
     <div>
-      <PageHeader title="Administrators" actions={<Button onClick={() => setOpen(true)}>Create admin</Button>} />
+      <PageHeader title="Administrators" actions={<Button onClick={openCreate}>Create admin</Button>} />
       {loading ? (
         <LoadingState label="Loading administrators..." />
       ) : error ? (
@@ -79,6 +109,7 @@ export function SuperAdminAdministratorsPage() {
               <TH>Clinic</TH>
               <TH>Role</TH>
               <TH>Status</TH>
+              <TH>Action</TH>
             </TR>
           </THead>
           <TBody>
@@ -91,6 +122,11 @@ export function SuperAdminAdministratorsPage() {
                 <TD>
                   <Badge variant={item.status === 'active' ? 'success' : 'outline'}>{item.status}</Badge>
                 </TD>
+                <TD>
+                  <Button variant="outline" size="sm" onClick={() => openEdit(item)}>
+                    Edit
+                  </Button>
+                </TD>
               </TR>
             ))}
           </TBody>
@@ -99,16 +135,31 @@ export function SuperAdminAdministratorsPage() {
 
       <Dialog
         open={open}
-        onClose={() => setOpen(false)}
-        title="Create clinic admin"
-        description="Role is limited to ADMIN. Super Admin cannot be assigned from this form."
+        onClose={() => {
+          setOpen(false)
+          setEditingUser(null)
+          form.reset({ role: 'ADMIN' })
+        }}
+        title={editingUser ? 'Edit clinic admin' : 'Create clinic admin'}
+        description={
+          editingUser
+            ? 'Update this administrator’s details and assignment.'
+            : 'Role is limited to ADMIN. Super Admin cannot be assigned from this form.'
+        }
         footer={
           <>
-            <Button variant="outline" onClick={() => setOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setOpen(false)
+                setEditingUser(null)
+                form.reset({ role: 'ADMIN' })
+              }}
+            >
               Cancel
             </Button>
             <Button onClick={form.handleSubmit(onSubmit)} loading={form.formState.isSubmitting}>
-              Create
+              {editingUser ? 'Save changes' : 'Create'}
             </Button>
           </>
         }

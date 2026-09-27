@@ -24,6 +24,7 @@ export function SuperAdminOrganizationsPage() {
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
+  const [editingOrg, setEditingOrg] = useState<Organization | null>(null)
   const form = useForm<Values>({ resolver: zodResolver(organizationSchema) })
 
   async function load() {
@@ -44,11 +45,48 @@ export function SuperAdminOrganizationsPage() {
     void load()
   }, [])
 
+  function openCreate() {
+    setEditingOrg(null)
+    form.reset({
+      schoolName: '',
+      clinicName: '',
+      address: '',
+      contact: '',
+      adminName: '',
+      adminEmail: '',
+    })
+    setOpen(true)
+  }
+
+  function openEdit(item: Organization) {
+    setEditingOrg(item)
+    form.reset({
+      schoolName: item.schoolName,
+      clinicName: item.clinicName,
+      address: '',
+      contact: '',
+      adminName: item.adminName ?? '',
+      adminEmail: '',
+    })
+    setOpen(true)
+  }
+
   async function onSubmit(values: Values) {
     try {
-      await superAdminService.createOrganization(values)
-      toast.success('Organization created. Clinic QR is now available to that clinic.')
+      if (editingOrg) {
+        await superAdminService.updateOrganization(editingOrg.id, {
+          schoolName: values.schoolName,
+          clinicName: values.clinicName,
+          address: values.address,
+          contact: values.contact,
+        })
+        toast.success('Organization updated.')
+      } else {
+        await superAdminService.createOrganization(values)
+        toast.success('Organization created. Clinic QR is now available to that clinic.')
+      }
       setOpen(false)
+      setEditingOrg(null)
       form.reset()
       await load()
     } catch (caught) {
@@ -61,7 +99,7 @@ export function SuperAdminOrganizationsPage() {
       <PageHeader
         title="Organizations"
         actions={
-          <Button onClick={() => setOpen(true)}>+ Create organization</Button>
+          <Button onClick={openCreate}>+ Create organization</Button>
         }
       />
       {loading ? (
@@ -79,6 +117,7 @@ export function SuperAdminOrganizationsPage() {
               <TH>Admin</TH>
               <TH>Status</TH>
               <TH>Created</TH>
+              <TH>Action</TH>
             </TR>
           </THead>
           <TBody>
@@ -91,6 +130,11 @@ export function SuperAdminOrganizationsPage() {
                   <Badge variant={item.status === 'active' ? 'success' : 'outline'}>{item.status}</Badge>
                 </TD>
                 <TD>{formatDate(item.createdAt)}</TD>
+                <TD>
+                  <Button variant="outline" size="sm" onClick={() => openEdit(item)}>
+                    Edit
+                  </Button>
+                </TD>
               </TR>
             ))}
           </TBody>
@@ -99,17 +143,32 @@ export function SuperAdminOrganizationsPage() {
 
       <Dialog
         open={open}
-        onClose={() => setOpen(false)}
-        title="Create organization"
-        description="This creates the clinic, initial admin account, and clinic identifier for QR codes."
+        onClose={() => {
+          setOpen(false)
+          setEditingOrg(null)
+          form.reset()
+        }}
+        title={editingOrg ? 'Edit organization' : 'Create organization'}
+        description={
+          editingOrg
+            ? 'Update the organization details for this clinic.'
+            : 'This creates the clinic, initial admin account, and clinic identifier for QR codes.'
+        }
         className="max-w-lg"
         footer={
           <>
-            <Button variant="outline" onClick={() => setOpen(false)}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setOpen(false)
+                setEditingOrg(null)
+                form.reset()
+              }}
+            >
               Cancel
             </Button>
             <Button onClick={form.handleSubmit(onSubmit)} loading={form.formState.isSubmitting}>
-              Create
+              {editingOrg ? 'Save changes' : 'Create'}
             </Button>
           </>
         }
