@@ -37,6 +37,7 @@ export function useStudentQueueRealtime(onChange: (reason?: QueueRealtimeReason)
     let lastResumeAt = 0
     let channelStatus = 'CLOSED'
     let channelConnecting = false
+    let hasSubscribed = false
 
     const updatePresence = async (next: Presence, heartbeat = false) => {
       if (disposed || next === presence && !heartbeat) return
@@ -55,10 +56,20 @@ export function useStudentQueueRealtime(onChange: (reason?: QueueRealtimeReason)
       lastActivity = Date.now()
       if (document.visibilityState === 'visible') void updatePresence('ONLINE')
     }
-    const subscribe = () => {
-      if (disposed || !tokenHash || channelConnecting || channelStatus === 'SUBSCRIBED') return
+    const subscribe = async (force = false) => {
+      if (disposed || !tokenHash || channelConnecting || (!force && channelStatus === 'SUBSCRIBED')) return
+      const previousChannel = force ? channel : null
+      if (force && channel) {
+        channel = null
+        channelStatus = 'CLOSED'
+        channelConnecting = false
+      }
       channelConnecting = true
-      if (channel) void supabaseAnon.removeChannel(channel)
+      if (previousChannel) await supabaseAnon.removeChannel(previousChannel)
+      if (disposed || !tokenHash) {
+        channelConnecting = false
+        return
+      }
       channel = supabaseAnon
         .channel(`student-queue:${tokenHash}`, { config: { private: true } })
         .on('broadcast', { event: 'queue_status_changed' }, (message) => {
@@ -70,8 +81,13 @@ export function useStudentQueueRealtime(onChange: (reason?: QueueRealtimeReason)
           callback.current('realtime')
         })
         .subscribe((status) => {
+          const wasSubscribed = hasSubscribed
           channelStatus = status
           channelConnecting = false
+          if (status === 'SUBSCRIBED') {
+            hasSubscribed = true
+            if (wasSubscribed) callback.current('resume')
+          }
           if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
             channelConnecting = false
             console.error('[Queue-Nect] Student queue realtime connection failed:', status)
@@ -86,7 +102,7 @@ export function useStudentQueueRealtime(onChange: (reason?: QueueRealtimeReason)
       lastResumeAt = now
       void updatePresence('ONLINE', true)
       callback.current('resume')
-      subscribe()
+      void subscribe(true)
     }
 
     const onVisibility = () => {
@@ -101,6 +117,13 @@ export function useStudentQueueRealtime(onChange: (reason?: QueueRealtimeReason)
       reconnect()
     }
     const onOnline = () => reconnect()
+    const onOffline = () => {
+      channelStatus = 'CLOSED'
+      void updatePresence('BACKGROUND')
+    }
+    const onPageHide = () => {
+      if (document.visibilityState === 'hidden') void updatePresence('BACKGROUND')
+    }
     const onBlur = () => {
       window.clearTimeout(blurTimer)
       blurTimer = window.setTimeout(() => {
@@ -122,12 +145,14 @@ export function useStudentQueueRealtime(onChange: (reason?: QueueRealtimeReason)
     void hashToken(ticket.statusToken).then((nextTokenHash) => {
       if (disposed) return
       tokenHash = nextTokenHash
-      subscribe()
+      void subscribe()
     }).catch((caught) => console.error('[Queue-Nect] Student queue realtime setup failed:', caught))
 
     document.addEventListener('visibilitychange', onVisibility)
+    window.addEventListener('pagehide', onPageHide)
     window.addEventListener('pageshow', onPageShow)
     window.addEventListener('online', onOnline)
+    window.addEventListener('offline', onOffline)
     window.addEventListener('focus', markActive)
     window.addEventListener('blur', onBlur)
     for (const event of ['pointerdown', 'keydown', 'touchstart'] as const) {
@@ -148,8 +173,10 @@ export function useStudentQueueRealtime(onChange: (reason?: QueueRealtimeReason)
       window.clearInterval(idleCheck)
       window.clearTimeout(blurTimer)
       document.removeEventListener('visibilitychange', onVisibility)
+      window.removeEventListener('pagehide', onPageHide)
       window.removeEventListener('pageshow', onPageShow)
       window.removeEventListener('online', onOnline)
+      window.removeEventListener('offline', onOffline)
       window.removeEventListener('focus', markActive)
       window.removeEventListener('blur', onBlur)
       for (const event of ['pointerdown', 'keydown', 'touchstart'] as const) {
