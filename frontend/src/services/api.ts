@@ -153,16 +153,49 @@ export const queueService = {
       link: getQueueJoinUrl(clinicIdentifier, token),
     }
   },
+  issueAccessToken: async (clinicIdentifier: string): Promise<{ token: string; link: string }> => {
+    const { data: org, error: orgError } = await getOrgIdFromClinicIdentifier(clinicIdentifier)
+    if (orgError) throw orgError
+    if (!org) throw new Error('Clinic not found.')
+
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString()
+    const token = generateSecureQrToken(32)
+
+    const { data, error } = await supabase
+      .from('organization_qr_tokens')
+      .insert({
+        organization_id: org.id,
+        token,
+        is_active: true,
+        expires_at: expiresAt,
+      })
+      .select('*')
+      .single()
+
+    if (error) throw error
+    if (!data) {
+      throw new Error('Queue access is invalid or expired.')
+    }
+
+    return {
+      token: data.token,
+      link: getQueueJoinUrl(clinicIdentifier, data.token),
+    }
+  },
   validateAccessToken: async (token: string): Promise<{ clinicIdentifier: string; clinicName: string }> => {
     const { data, error } = await supabase
       .from('organization_qr_tokens')
-      .select('token, organization_id, is_active, organizations!inner(public_identifier, name)')
+      .select('token, organization_id, is_active, expires_at, organizations!inner(public_identifier, name)')
       .eq('token', token)
       .eq('is_active', true)
       .maybeSingle()
 
     if (error) throw error
     if (!data) {
+      throw new Error('Queue access is invalid or expired.')
+    }
+
+    if (data.expires_at && new Date(data.expires_at).getTime() < Date.now()) {
       throw new Error('Queue access is invalid or expired.')
     }
 
