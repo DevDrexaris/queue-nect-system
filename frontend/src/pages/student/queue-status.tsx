@@ -5,7 +5,7 @@ import { queueService } from '../../services/api'
 import { userMessage } from '../../lib/api'
 import { readStoredTicket } from '../../lib/ticket'
 import { useOnlineStatus } from '../../hooks/use-online-status'
-import { useStudentQueueRealtime } from '../../hooks/use-student-presence'
+import { useStudentQueueRealtime, type StudentQueueRealtimeEvent } from '../../hooks/use-student-presence'
 import { Card, CardContent } from '../../components/ui/card'
 import { QueueNumber } from '../../components/ui/queue-number'
 import { QueueStatusBadge } from '../../components/ui/queue-status-badge'
@@ -16,7 +16,7 @@ import { QueueEventAnimation } from '../../components/ui/queue-event-animation'
 import { EmptyState, ErrorState, LoadingState } from '../../components/ui/states'
 import { formatElapsedMinutes, formatServiceRange, formatWait } from '../../lib/format'
 import { cn } from '../../lib/utils'
-import type { QueueEntry, QueueSnapshot } from '../../types'
+import type { QueueEntry, QueueSnapshot, QueueStatus } from '../../types'
 
 function headline(entry: QueueEntry) {
   if (entry.status === 'CALLED') return 'Your number is next. Please proceed to the clinic.'
@@ -33,6 +33,7 @@ function headline(entry: QueueEntry) {
 const NOTIFICATION_PREF = 'qn.queue-notifications'
 const SOUND_PREF = 'qn.queue-call-sound'
 const LAST_CALL_KEY = 'qn.last-notified-call'
+const REALTIME_STATUSES: QueueStatus[] = ['WAITING', 'CALLED', 'SERVING', 'AWAITING_RETURN', 'COMPLETED', 'CANCELLED', 'NO_SHOW']
 
 function storedPreference(key: string, fallback: boolean) {
   try {
@@ -87,6 +88,7 @@ export function QueueStatusPage() {
   const hasLoadedRef = useRef(false)
   const requestIdRef = useRef(0)
   const lastCallKeyRef = useRef<string | null>(storedCallKey())
+  const lastRealtimeVersionRef = useRef(0)
 
   const triggerCallAlert = useCallback((nextEntry: QueueEntry, callKey: string) => {
     lastCallKeyRef.current = callKey
@@ -136,11 +138,59 @@ export function QueueStatusPage() {
     }
   }, [ticket, triggerCallAlert])
 
+  const applyRealtimeEvent = useCallback((event: StudentQueueRealtimeEvent) => {
+    if (!ticket || !event.status || !REALTIME_STATUSES.includes(event.status as QueueStatus)) return
+    if (event.queue_entry_id && event.queue_entry_id !== ticket.queueId) return
+    if (!event.queue_entry_id && event.queue_number !== ticket.queueNumber) {
+      console.warn('[Queue-Nect] Ignoring student realtime event without a matching queue entry.', event)
+      return
+    }
+
+    const version = event.updated_at ? new Date(event.updated_at).getTime() : Date.now()
+    if (event.updated_at && version < lastRealtimeVersionRef.current) return
+    if (event.updated_at && version === lastRealtimeVersionRef.current) return
+    lastRealtimeVersionRef.current = version
+
+    const nextStatus = event.status as QueueStatus
+    let nextEntry: QueueEntry | null = null
+    setEntry((current) => {
+      if (!current) return current
+      nextEntry = {
+        ...current,
+        status: nextStatus,
+        calledAt: event.called_at ?? current.calledAt,
+        cancellationSource: event.cancellation_source ?? current.cancellationSource,
+      }
+      return nextEntry
+    })
+    setSnapshot((current) => {
+      if (!current) return current
+      return {
+        ...current,
+        entries: current.entries.map((item) => item.id === ticket.queueId
+          ? { ...item, status: nextStatus, calledAt: event.called_at ?? item.calledAt }
+          : item),
+        nowServing: current.nowServing?.id === ticket.queueId
+          ? { ...current.nowServing, status: nextStatus, calledAt: event.called_at ?? current.nowServing.calledAt }
+          : current.nowServing,
+      }
+    })
+
+    if (nextStatus === 'CALLED' && event.previous_status !== 'CALLED' && event.updated_at) {
+      const callKey = `${ticket.queueId}:${event.updated_at}`
+      const alertEntry = nextEntry ?? entry
+      if (alertEntry && callKey !== lastCallKeyRef.current) triggerCallAlert({ ...alertEntry, status: 'CALLED', calledAt: event.called_at ?? alertEntry.calledAt }, callKey)
+    }
+  }, [entry, ticket, triggerCallAlert])
+
   useEffect(() => {
     const initialLoad = window.setTimeout(() => void load('initial'), 0)
     return () => window.clearTimeout(initialLoad)
   }, [load])
-  useStudentQueueRealtime((reason) => void load(reason ?? 'realtime'), Boolean(entry && ['WAITING', 'CALLED', 'SERVING', 'AWAITING_RETURN'].includes(entry.status)))
+  useStudentQueueRealtime((message) => {
+    if (message.reason === 'realtime' && message.event) applyRealtimeEvent(message.event)
+    else void load('resume')
+  }, Boolean(ticket))
 
   async function enableNotifications() {
     if (!('Notification' in window)) {

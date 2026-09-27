@@ -3,7 +3,16 @@ import { supabaseAnon } from '../lib/supabase'
 import { readStoredTicket } from '../lib/ticket'
 
 type Presence = 'ONLINE' | 'IDLE' | 'BACKGROUND' | 'OFFLINE'
-type QueueRealtimeReason = 'realtime' | 'resume'
+export type StudentQueueRealtimeEvent = {
+  queue_entry_id?: string
+  queue_number?: string
+  previous_status?: string | null
+  status?: string
+  updated_at?: string
+  called_at?: string | null
+  cancellation_source?: 'STUDENT' | 'ADMIN' | null
+}
+type QueueRealtimeMessage = { reason: 'realtime' | 'resume'; event?: StudentQueueRealtimeEvent }
 const IDLE_AFTER_MS = 2 * 60 * 1000
 const HEARTBEAT_MS = 45 * 1000
 
@@ -13,7 +22,7 @@ async function hashToken(token: string) {
   return Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, '0')).join('')
 }
 
-export function useStudentQueueRealtime(onChange: (reason?: QueueRealtimeReason) => void, enabled = true) {
+export function useStudentQueueRealtime(onChange: (message: QueueRealtimeMessage) => void, enabled = true) {
   const callback = useRef(onChange)
 
   useEffect(() => {
@@ -89,7 +98,7 @@ export function useStudentQueueRealtime(onChange: (reason?: QueueRealtimeReason)
             console.warn('[Queue-Nect] Ignoring malformed student queue realtime event.', message)
             return
           }
-          callback.current('realtime')
+          callback.current({ reason: 'realtime', event: payload })
         })
         .subscribe((status) => {
           if (generation !== channelGeneration) return
@@ -100,7 +109,7 @@ export function useStudentQueueRealtime(onChange: (reason?: QueueRealtimeReason)
           if (status === 'SUBSCRIBED') {
             hasSubscribed = true
             logRealtime('SUBSCRIBED')
-            if (wasSubscribed) callback.current('resume')
+            if (wasSubscribed) callback.current({ reason: 'resume' })
           }
           if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
             channelConnecting = false
@@ -120,7 +129,7 @@ export function useStudentQueueRealtime(onChange: (reason?: QueueRealtimeReason)
       if (now - lastResumeAt < 1000) return
       lastResumeAt = now
       void updatePresence('ONLINE', true)
-      callback.current('resume')
+      callback.current({ reason: 'resume' })
       void subscribe(true)
     }
 
