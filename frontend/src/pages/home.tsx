@@ -1,9 +1,18 @@
-import { Link } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import { Logo } from '../components/brand/logo'
 import { buttonVariants } from '../components/ui/button'
+import { LoadingState } from '../components/ui/states'
+import { useAuth } from '../hooks/use-auth'
 import { cn } from '../lib/utils'
 
 export function HomePage() {
+  const { user, loading } = useAuth()
+
+  if (loading) return <LoadingState label="Checking session..." />
+  if (user) {
+    return <Navigate to={user.role === 'SUPER_ADMIN' ? '/super-admin' : '/admin'} replace />
+  }
+
   return (
     <div className="min-h-dvh bg-background">
       <header className="mx-auto flex max-w-5xl items-center justify-between px-6 py-5">
