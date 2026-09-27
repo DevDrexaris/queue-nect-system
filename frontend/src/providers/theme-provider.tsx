@@ -1,15 +1,7 @@
-import { createContext, useContext, useEffect, useLayoutEffect, useState, type ReactNode } from 'react'
-
-export type ThemePreference = 'light' | 'dark' | 'system'
-
-type ThemeContextValue = {
-  theme: ThemePreference
-  isDark: boolean
-  setTheme: (theme: ThemePreference) => void
-}
+import { useEffect, useLayoutEffect, useState, type ReactNode } from 'react'
+import { ThemeContext, type ThemePreference } from './theme-context'
 
 const THEME_KEY = 'queue-nect-theme'
-const ThemeContext = createContext<ThemeContextValue | null>(null)
 
 function readTheme(): ThemePreference {
   try {
@@ -48,10 +40,4 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return <ThemeContext.Provider value={{ theme, isDark: dark, setTheme }}>{children}</ThemeContext.Provider>
-}
-
-export function useTheme() {
-  const context = useContext(ThemeContext)
-  if (!context) throw new Error('useTheme must be used inside ThemeProvider')
-  return context
 }
