@@ -25,10 +25,16 @@ export function JoinQueuePage() {
 
   useEffect(() => {
     async function validateAccess() {
-      if (!clinicId || !token) {
+      if (!clinicId) {
         setAccessValid(false)
         setCheckingAccess(false)
         navigate('/queue/access-required', { replace: true })
+        return
+      }
+
+      if (!token) {
+        setAccessValid(true)
+        setCheckingAccess(false)
         return
       }
 
