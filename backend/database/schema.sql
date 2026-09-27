@@ -286,6 +286,19 @@ for all
 using (public.is_super_admin())
 with check (public.is_super_admin());
 
+create policy "Public can read active queue sessions for active organizations"
+on public.queue_sessions
+for select
+using (
+  is_active = true
+  and exists (
+    select 1
+    from public.organizations o
+    where o.id = organization_id
+      and o.is_active = true
+  )
+);
+
 create policy "Staff can view queue sessions for their org"
 on public.queue_sessions
 for select
@@ -298,14 +311,6 @@ on public.queue_sessions
 for insert
 with check (
   public.is_super_admin() or public.is_org_admin(organization_id)
-  or (
-    exists (
-      select 1
-      from public.organizations o
-      where o.id = organization_id
-        and o.is_active = true
-    )
-  )
 );
 
 create policy "Staff can update queue sessions for their org"
@@ -317,6 +322,28 @@ using (
 with check (
   public.is_super_admin() or public.is_org_staff(organization_id)
 );
+
+create or replace function public.bump_queue_session_next_number()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  update public.queue_sessions
+  set next_number = next_number + 1,
+      updated_at = now()
+  where id = NEW.queue_session_id
+    and organization_id = NEW.organization_id;
+
+  return NEW;
+end;
+$$;
+
+create trigger queue_entries_after_insert_bump_next_number
+after insert on public.queue_entries
+for each row
+execute function public.bump_queue_session_next_number();
 
 create policy "Public can view active queue entries for display"
 on public.queue_entries
@@ -337,6 +364,14 @@ with check (
     from public.organizations o
     where o.id = organization_id
       and o.is_active = true
+  )
+  and exists (
+    select 1
+    from public.queue_sessions qs
+    where qs.id = queue_session_id
+      and qs.organization_id = organization_id
+      and qs.is_active = true
+      and qs.session_date = current_date
   )
 );
 

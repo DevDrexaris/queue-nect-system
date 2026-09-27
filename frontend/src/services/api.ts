@@ -456,38 +456,17 @@ export const queueService = {
     if (!org) throw new Error('Clinic not found.')
 
     const today = new Date().toISOString().slice(0, 10)
-    let { data: session, error: sessionError } = await supabaseAnon
+    const { data: session, error: sessionError } = await supabaseAnon
       .from('queue_sessions')
       .select('*')
       .eq('organization_id', org.id)
       .eq('session_date', today)
+      .eq('is_active', true)
       .maybeSingle()
 
     if (sessionError) throw sessionError
-
     if (!session) {
-      const createSession = async () => await withPublicFallback(
-        async () => {
-          const result = await supabaseAnon
-            .from('queue_sessions')
-            .insert({ organization_id: org.id, session_date: today, queue_prefix: org.queue_prefix, next_number: 1, is_active: true })
-            .select('*')
-            .single()
-          return result
-        },
-        async () => {
-          const result = await supabase
-            .from('queue_sessions')
-            .insert({ organization_id: org.id, session_date: today, queue_prefix: org.queue_prefix, next_number: 1, is_active: true })
-            .select('*')
-            .single()
-          return result
-        },
-      )
-
-      const insert = await createSession()
-      if (insert.error) throw insert.error
-      session = insert.data
+      throw new Error('This clinic queue is not open yet. Please ask staff to start the queue session.')
     }
 
     const nextNumber = (session.next_number ?? 1).toString().padStart(3, '0')
@@ -510,11 +489,6 @@ export const queueService = {
       .single()
 
     if (error) throw error
-
-    await supabaseAnon
-      .from('queue_sessions')
-      .update({ next_number: (session.next_number ?? 1) + 1, updated_at: new Date().toISOString() })
-      .eq('id', session.id)
 
     return {
       id: data.id,
