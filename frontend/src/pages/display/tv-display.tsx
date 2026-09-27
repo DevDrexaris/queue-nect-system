@@ -71,6 +71,15 @@ export function TvDisplayPage() {
   const primaryId = primary?.id
   const primaryQueueNumber = primary?.queueNumber
   const primaryStatus = primary?.status
+  const announcementText = data?.clinic && primaryQueueNumber
+    ? buildQueueAnnouncement({
+        queueNumber: primaryQueueNumber,
+        organizationName: data.clinic.name,
+        serviceArea: data.clinic.announcementServiceArea || 'the service desk',
+        useCustom: data.clinic.announcementUseCustom ?? false,
+        template: data.clinic.announcementTemplate || 'Queue {queue_number}, please proceed to {service_area}.',
+      })
+    : 'Please listen for your queue number.'
 
   useEffect(() => {
     const key = primaryId && primaryQueueNumber && primaryStatus
@@ -232,7 +241,7 @@ export function TvDisplayPage() {
       </main>
 
       <footer className="flex items-center justify-between gap-4 text-sm text-muted-foreground">
-        <p>{data?.clinic.announcement || 'Please listen for your queue number.'}</p>
+        <p>{announcementText}</p>
   
       </footer>
     </div>
