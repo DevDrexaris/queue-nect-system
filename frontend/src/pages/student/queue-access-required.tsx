@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import { QrCode, ShieldAlert } from 'lucide-react'
 import { buttonVariants } from '../../components/ui/button'
+import { ThemeSelector } from '../../components/ui/theme-selector'
 import { queueService } from '../../services/api'
 import { cn } from '../../lib/utils'
 
@@ -39,9 +40,12 @@ export function QueueAccessRequiredPage() {
   }, [clinicId])
 
   return (
-    <div className="mx-auto flex min-h-dvh max-w-md items-center justify-center px-4 py-8">
+    <div className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center gap-3 px-4 py-8">
+      <div className="flex w-full justify-end">
+        <ThemeSelector />
+      </div>
       <div className="w-full rounded-2xl border border-border bg-card p-6 text-center shadow-sm">
-        <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-amber-100 text-amber-700">
+        <div className="mx-auto flex size-14 items-center justify-center rounded-full bg-warning/10 text-warning">
           <ShieldAlert className="size-6" />
         </div>
         <h1 className="mt-5 text-2xl font-semibold tracking-tight">Queue Access Required</h1>
@@ -66,7 +70,7 @@ export function QueueAccessRequiredPage() {
               <p className="mt-2">No app installation is required.</p>
             </div>
           ) : (
-            <div className="flex min-h-[180px] items-center justify-center px-2 text-center text-sm text-red-600">
+            <div className="flex min-h-[180px] items-center justify-center px-2 text-center text-sm text-destructive">
               {errorMessage || 'QR code is unavailable right now. Please try again.'}
             </div>
           )}

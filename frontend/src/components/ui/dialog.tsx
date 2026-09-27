@@ -39,7 +39,7 @@ export function Dialog({ open, onClose, title, description, children, footer, cl
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center">
-      <button type="button" className="absolute inset-0 bg-foreground/40" aria-label="Close dialog" onClick={onClose} />
+      <button type="button" className="absolute inset-0 bg-overlay" aria-label="Close dialog" onClick={onClose} />
       <div
         ref={dialogRef}
         role="dialog"

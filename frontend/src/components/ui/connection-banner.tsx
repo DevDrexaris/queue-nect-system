@@ -20,7 +20,7 @@ export function ConnectionBanner({ compact = false }: { compact?: boolean }) {
         className={
           compact
             ? 'flex items-center gap-2 text-xs text-amber-700'
-            : 'flex items-center justify-center gap-2 bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-200'
+            : 'flex items-center justify-center gap-2 bg-warning/10 px-4 py-2 text-sm text-warning'
         }
       >
         <WifiOff className="size-4" />

@@ -137,14 +137,14 @@ export function AdminQueuePage() {
               <Button
                 size="sm"
                 variant={calledEntry ? 'default' : 'outline'}
-                className={calledEntry ? 'border-emerald-500 bg-emerald-600 text-white shadow-[0_0_12px_rgba(16,185,129,0.28)] ring-1 ring-emerald-300/70 animate-pulse' : ''}
+                className={calledEntry ? 'animate-pulse' : ''}
                 onClick={() => void serveNext()}
                 loading={calling}
               >
                 Serve next
               </Button>
               {calledEntry && serving?.status === 'CALLED' ? (
-                <div className="pointer-events-none absolute -top-5 right-0 z-10 inline-flex items-center gap-1 rounded-full border border-emerald-300/80 bg-emerald-500/10 px-1.5 py-0.5 text-[7px] font-medium tracking-[0.12em] text-emerald-700 shadow-[0_3px_12px_rgba(16,185,129,0.18)] backdrop-blur-sm animate-[queue-call-toast_220ms_ease-out]">
+                <div className="pointer-events-none absolute -top-5 right-0 z-10 inline-flex items-center gap-1 rounded-full border border-status-serving/25 bg-status-serving/10 px-1.5 py-0.5 text-[7px] font-medium tracking-[0.12em] text-status-serving animate-[queue-call-toast_220ms_ease-out]">
                   <span className="h-1.25 w-1.25 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.9)]" />
                   SERVE
                 </div>
@@ -165,12 +165,12 @@ export function AdminQueuePage() {
           {serving ? (
             <div
               className={[
-                'relative overflow-hidden rounded-xl border p-4 sm:p-5',
+                'relative overflow-hidden rounded-xl border border-border bg-card p-4 sm:p-5',
                 serving.status === 'CALLED'
-                  ? 'border-amber-400/80 [box-shadow:0_0_0_1px_rgba(251,146,60,0.36),0_0_22px_rgba(251,146,60,0.18)] animate-[queue-card-glow-amber_1.35s_ease-in-out_infinite]'
+                  ? 'border-status-called/40 bg-status-called/10 animate-[queue-call-toast_220ms_ease-out]'
                   : '',
                 serving.status === 'SERVING'
-                  ? 'border-emerald-400/80 [box-shadow:0_0_0_1px_rgba(16,185,129,0.28),0_0_16px_rgba(16,185,129,0.12)]'
+                  ? 'border-status-serving/40 bg-status-serving/10'
                   : '',
               ].join(' ')}
             >
@@ -179,7 +179,7 @@ export function AdminQueuePage() {
                 <QueueNumber
                   value={serving.queueNumber}
                   size="lg"
-                  className="text-black drop-shadow-[1px_1px_0_rgba(255,255,255,0.8)]"
+                  className={serving.status === 'CALLED' ? 'text-status-called' : 'text-status-serving'}
                 />
                 <p className="mt-2 font-medium">{serving.studentName}</p>
                 <p className="text-sm text-muted-foreground">{serving.purpose}</p>
@@ -195,7 +195,7 @@ export function AdminQueuePage() {
                 <Button variant="outline" onClick={() => void run('skip', serving)}>
                   Skip
                 </Button>
-                <Button variant="outline" className="border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100" onClick={() => void run('recall', serving)}>
+                <Button variant="outline" className="border-status-waiting/30 bg-status-waiting/10 text-status-waiting hover:bg-status-waiting/15" onClick={() => void run('recall', serving)}>
                   <span className="inline-flex items-center gap-1.5">
                     <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4">
                       <path d="M12 6v6l4 2m4-2a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />

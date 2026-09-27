@@ -10,7 +10,6 @@ import {
   Menu,
   QrCode,
   Settings,
-  Sun,
   Users,
   X,
 } from 'lucide-react'
@@ -19,8 +18,8 @@ import { Button } from '../ui/button'
 import { ConnectionBanner } from '../ui/connection-banner'
 import { useAuth } from '../../hooks/use-auth'
 import { useOnlineStatus } from '../../hooks/use-online-status'
-import { useAdminTheme } from '../../hooks/use-admin-theme'
 import { SidebarNav, type NavSection } from './sidebar-nav'
+import { ThemeSelector } from '../ui/theme-selector'
 import { toast } from 'sonner'
 
 const sections: NavSection[] = [
@@ -68,7 +67,6 @@ export function AdminLayout() {
   const location = useLocation()
   const navigate = useNavigate()
   const online = useOnlineStatus()
-  const { isDark, toggleTheme } = useAdminTheme()
   const title = titles[location.pathname] || 'Admin'
 
   async function onLogout() {
@@ -78,10 +76,10 @@ export function AdminLayout() {
   }
 
   return (
-    <div className={`${isDark ? 'dark ' : ''}min-h-dvh bg-background`}>
+    <div className="min-h-dvh bg-background text-foreground">
       <ConnectionBanner />
       <div className="flex min-h-dvh">
-        <aside className="hidden w-64 shrink-0 border-r border-border bg-card lg:flex lg:flex-col">
+        <aside className="hidden w-64 shrink-0 border-r border-border bg-surface lg:flex lg:flex-col">
           <div className="flex h-16 items-center border-b border-border px-4">
             <Link to="/admin" aria-label="Queue-Nect admin home">
               <Logo size="sm" />
@@ -102,8 +100,8 @@ export function AdminLayout() {
 
         {open ? (
           <div className="fixed inset-0 z-40 flex lg:hidden">
-            <div className="w-72 max-w-[85vw] shrink-0 border-r border-border bg-card/95 shadow-2xl backdrop-blur-sm">
-              <aside className="flex h-full w-full flex-col bg-card/95">
+            <div className="w-72 max-w-[85vw] shrink-0 border-r border-border bg-surface shadow-xl backdrop-blur-sm">
+              <aside className="flex h-full w-full flex-col bg-surface">
                 <div className="flex h-16 items-center justify-between border-b border-border px-4">
                   <Logo size="sm" />
                   <Button variant="ghost" size="icon" onClick={() => setOpen(false)} aria-label="Close navigation">
@@ -115,12 +113,12 @@ export function AdminLayout() {
                 </div>
               </aside>
             </div>
-            <button type="button" className="flex-1 bg-slate-950/10 backdrop-blur-[1px] transition-colors hover:bg-slate-950/15" aria-label="Close menu" onClick={() => setOpen(false)} />
+            <button type="button" className="flex-1 bg-overlay backdrop-blur-[1px]" aria-label="Close menu" onClick={() => setOpen(false)} />
           </div>
         ) : null}
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-border bg-card/90 px-4 backdrop-blur">
+          <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-border bg-elevated/90 px-4 backdrop-blur">
             <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setOpen(true)} aria-label="Open navigation">
               <Menu className="size-[18px]" />
             </Button>
@@ -132,9 +130,7 @@ export function AdminLayout() {
               <span className={`size-2 rounded-full ${online ? 'bg-emerald-500' : 'bg-amber-500'}`} />
               {online ? 'Online' : 'Offline'}
             </span>
-            <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'} title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}>
-              <Sun className="size-4" />
-            </Button>
+            <ThemeSelector />
             <div className="relative">
               <Button variant="outline" size="sm" onClick={() => setMenuOpen((value) => !value)} aria-haspopup="menu">
                 {user?.name?.split(' ')[0] || 'Profile'}

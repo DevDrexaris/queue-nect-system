@@ -6,6 +6,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0B2A4A" />
     <meta name="description" content="Queue-Nect — Smart Queuing" />
+    <script>
+      (() => {
+        try {
+          const saved = localStorage.getItem('queue-nect-theme')
+          const legacy = localStorage.getItem('queue-nect-admin-theme')
+          const theme = saved || (legacy === 'light' ? 'light' : legacy === 'dark' ? 'dark' : 'system')
+          const dark = theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+          document.documentElement.classList.toggle('dark', dark)
+        } catch {
+          document.documentElement.classList.toggle('dark', window.matchMedia('(prefers-color-scheme: dark)').matches)
+        }
+      })()
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

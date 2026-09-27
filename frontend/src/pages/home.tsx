@@ -4,6 +4,7 @@ import { buttonVariants } from '../components/ui/button'
 import { LoadingState } from '../components/ui/states'
 import { useAuth } from '../hooks/use-auth'
 import { cn } from '../lib/utils'
+import { ThemeSelector } from '../components/ui/theme-selector'
 
 export function HomePage() {
   const { user, loading } = useAuth()
@@ -15,11 +16,14 @@ export function HomePage() {
 
   return (
     <div className="min-h-dvh bg-background">
-      <header className="mx-auto flex max-w-5xl items-center justify-between px-6 py-5">
-        <Logo />
-        <Link to="/clinic/login" className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}>
-          Clinic / Staff Login
-        </Link>
+      <header className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-5 sm:px-6">
+        <Logo size="sm" />
+        <div className="ml-auto flex w-full items-center justify-end gap-2 sm:w-auto">
+          <ThemeSelector />
+          <Link to="/clinic/login" className={cn(buttonVariants({ variant: 'outline', size: 'sm' }))}>
+            Clinic / Staff Login
+          </Link>
+        </div>
       </header>
       <main className="mx-auto max-w-5xl px-6 py-16">
         <p className="text-sm font-medium text-accent">Digital Queue Management</p>

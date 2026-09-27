@@ -181,10 +181,10 @@ export function QueueStatusPage() {
   if (entry.status === 'CANCELLED') {
     return (
       <div className="space-y-5 text-center">
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-6 text-emerald-900">
-          <p className="text-xs font-medium tracking-[0.2em] uppercase text-emerald-700">Queue cancelled</p>
+        <div className="rounded-xl border border-destructive/25 bg-destructive/10 p-6 text-foreground">
+          <p className="text-xs font-medium tracking-[0.2em] uppercase text-destructive">Queue cancelled</p>
           <h1 className="mt-3 text-2xl font-semibold">Thank you for visiting.</h1>
-          <p className="mt-3 text-sm leading-6 text-emerald-800">
+          <p className="mt-3 text-sm leading-6 text-muted-foreground">
             Your queue number has been cancelled successfully. Please scan the QR code again when you are ready to get a new queue number.
           </p>
         </div>
@@ -206,9 +206,11 @@ export function QueueStatusPage() {
       <div
         className={cn(
           'rounded-xl border p-5 text-center',
-          entry.status === 'CALLED' && 'border-amber-300 bg-amber-50',
-          entry.status === 'SERVING' && 'border-blue-300 bg-blue-50',
-          (entry.status === 'SERVED' || entry.status === 'COMPLETED') && 'border-emerald-300 bg-emerald-50',
+          entry.status === 'WAITING' && 'border-status-waiting/25 bg-status-waiting/10',
+          entry.status === 'CALLED' && 'border-status-called/25 bg-status-called/10',
+          entry.status === 'SERVING' && 'border-status-serving/25 bg-status-serving/10',
+          (entry.status === 'SERVED' || entry.status === 'COMPLETED') && 'border-border bg-muted',
+          entry.status === 'NO_SHOW' && 'border-status-no-show/25 bg-status-no-show/10',
         )}
       >
         <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Your number</p>

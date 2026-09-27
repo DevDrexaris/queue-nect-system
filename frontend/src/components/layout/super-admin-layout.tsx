@@ -1,12 +1,12 @@
 import { useState } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { Activity, Building2, LayoutDashboard, LogOut, Menu, Settings, Shield, Sun, Users, X } from 'lucide-react'
+import { Activity, Building2, LayoutDashboard, LogOut, Menu, Settings, Shield, Users, X } from 'lucide-react'
 import { Logo } from '../brand/logo'
 import { Button } from '../ui/button'
 import { ConnectionBanner } from '../ui/connection-banner'
 import { useAuth } from '../../hooks/use-auth'
 import { SidebarNav, type NavSection } from './sidebar-nav'
-import { useAdminTheme } from '../../hooks/use-admin-theme'
+import { ThemeSelector } from '../ui/theme-selector'
 import { toast } from 'sonner'
 
 const sections: NavSection[] = [
@@ -35,7 +35,6 @@ export function SuperAdminLayout() {
   const [open, setOpen] = useState(false)
   const location = useLocation()
   const navigate = useNavigate()
-  const { isDark, toggleTheme } = useAdminTheme()
   const title = titles[location.pathname] || 'Super Admin'
 
   async function onLogout() {
@@ -45,10 +44,10 @@ export function SuperAdminLayout() {
   }
 
   return (
-    <div className={`${isDark ? 'dark ' : ''}min-h-dvh bg-background`}>
+    <div className="min-h-dvh bg-background text-foreground">
       <ConnectionBanner />
       <div className="flex min-h-dvh">
-        <aside className="hidden w-64 shrink-0 border-r border-border bg-card lg:flex lg:flex-col">
+        <aside className="hidden w-64 shrink-0 border-r border-border bg-surface lg:flex lg:flex-col">
           <div className="flex h-16 items-center gap-2 border-b border-border px-4">
             <Logo size="sm" />
             <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase">
@@ -67,8 +66,8 @@ export function SuperAdminLayout() {
 
         {open ? (
           <div className="fixed inset-0 z-40 lg:hidden">
-            <button type="button" className="absolute inset-0 bg-foreground/40" aria-label="Close menu" onClick={() => setOpen(false)} />
-            <aside className="relative z-10 flex h-full w-72 flex-col bg-card shadow-xl">
+            <button type="button" className="absolute inset-0 bg-overlay" aria-label="Close menu" onClick={() => setOpen(false)} />
+            <aside className="relative z-10 flex h-full w-72 flex-col bg-surface shadow-xl">
               <div className="flex h-16 items-center justify-between px-4">
                 <Logo size="sm" />
                 <Button variant="ghost" size="icon" onClick={() => setOpen(false)} aria-label="Close navigation">
@@ -89,9 +88,7 @@ export function SuperAdminLayout() {
               <Shield className="hidden size-4 text-muted-foreground sm:block" />
               <h1 className="truncate text-base font-semibold">{title}</h1>
             </div>
-            <Button variant="ghost" size="icon" onClick={toggleTheme} aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'} title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}>
-              <Sun className="size-4" />
-            </Button>
+            <ThemeSelector />
             <Link to="/super-admin/login" className="text-sm text-muted-foreground hover:text-foreground">
               Account
             </Link>

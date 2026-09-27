@@ -8,37 +8,37 @@ const config: Record<
 > = {
   WAITING: {
     label: 'Waiting',
-    className: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200',
+    className: 'border border-status-waiting/20 bg-status-waiting/10 text-status-waiting',
     icon: CircleDashed,
   },
   CALLED: {
     label: 'Called',
-    className: 'bg-amber-50 text-amber-800 dark:bg-amber-950/50 dark:text-amber-200',
+    className: 'border border-status-called/20 bg-status-called/10 text-status-called',
     icon: Bell,
   },
   SERVING: {
     label: 'Serving',
-    className: 'bg-blue-50 text-blue-800 dark:bg-blue-950/50 dark:text-blue-200',
+    className: 'border border-status-serving/20 bg-status-serving/10 text-status-serving',
     icon: LoaderCircle,
   },
   COMPLETED: {
     label: 'Served',
-    className: 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200',
+    className: 'border border-border bg-muted text-status-completed',
     icon: CheckCircle2,
   },
   SERVED: {
     label: 'Served',
-    className: 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200',
+    className: 'border border-border bg-muted text-status-completed',
     icon: CheckCircle2,
   },
   CANCELLED: {
     label: 'Cancelled',
-    className: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400',
+    className: 'border border-destructive/20 bg-destructive/10 text-status-cancelled',
     icon: XCircle,
   },
   NO_SHOW: {
     label: 'No show',
-    className: 'bg-orange-50 text-orange-800 dark:bg-orange-950/50 dark:text-orange-200',
+    className: 'border border-status-no-show/20 bg-status-no-show/10 text-status-no-show',
     icon: AlertTriangle,
   },
 }

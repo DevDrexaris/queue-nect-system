@@ -29,13 +29,15 @@ import { SuperAdminAdministratorsPage } from './pages/super-admin/administrators
 import { SuperAdminActivityPage } from './pages/super-admin/activity'
 import { SuperAdminSettingsPage } from './pages/super-admin/settings'
 import { TvDisplayPage } from './pages/display/tv-display'
+import { ThemeProvider } from './providers/theme-provider'
 
 export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <AppToaster />
-        <Routes>
+    <ThemeProvider>
+      <AuthProvider>
+        <BrowserRouter>
+          <AppToaster />
+          <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/queue/status" element={<StudentLayout />}>
             <Route index element={<QueueStatusPage />} />
@@ -83,8 +85,9 @@ export default function App() {
             </Route>
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
+    </ThemeProvider>
   )
 }

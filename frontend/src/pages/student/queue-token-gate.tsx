@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { queueService } from '../../services/api'
 import { LoadingState } from '../../components/ui/states'
+import { ThemeSelector } from '../../components/ui/theme-selector'
 import { QueueAccessRequiredPage } from './queue-access-required'
 
 export function QueueTokenGate() {
@@ -31,7 +32,16 @@ export function QueueTokenGate() {
     void validate()
   }, [navigate, token])
 
-  if (loading) return <LoadingState label="Validating queue access..." />
+  if (loading) {
+    return (
+      <div className="mx-auto flex min-h-dvh max-w-md flex-col items-center justify-center gap-4 px-4">
+        <div className="flex w-full justify-end">
+          <ThemeSelector />
+        </div>
+        <LoadingState label="Validating queue access..." />
+      </div>
+    )
+  }
   if (invalid) return <QueueAccessRequiredPage />
 
   return null
