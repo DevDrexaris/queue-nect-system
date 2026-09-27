@@ -336,7 +336,15 @@ declare
   v_revoked_at timestamptz;
   v_people_ahead integer;
 begin
-  select q, t.revoked_at into v_entry, v_revoked_at
+  select t.revoked_at into v_revoked_at
+  from public.queue_status_tokens t
+  where t.token_hash = encode(digest(convert_to(p_status_token, 'UTF8'), 'sha256'), 'hex');
+
+  if not found then
+    raise exception 'Queue access is invalid or expired';
+  end if;
+
+  select q.* into v_entry
   from public.queue_status_tokens t
   join public.queue_entries q on q.id = t.queue_entry_id
   where t.token_hash = encode(digest(convert_to(p_status_token, 'UTF8'), 'sha256'), 'hex');
@@ -425,13 +433,19 @@ declare
   v_entry public.queue_entries%rowtype;
   v_revoked_at timestamptz;
 begin
-  select q, t.revoked_at into v_entry, v_revoked_at
+  select q.* into v_entry
   from public.queue_status_tokens t
   join public.queue_entries q on q.id = t.queue_entry_id
   where t.token_hash = encode(digest(convert_to(p_status_token, 'UTF8'), 'sha256'), 'hex')
   for update of q, t;
 
-  if not found or v_revoked_at is not null then
+  if not found then
+    raise exception 'Queue access is invalid or no longer active';
+  end if;
+  select t.revoked_at into v_revoked_at
+  from public.queue_status_tokens t
+  where t.queue_entry_id = v_entry.id;
+  if v_revoked_at is not null then
     raise exception 'Queue access is invalid or no longer active';
   end if;
   if v_entry.status not in ('WAITING', 'CALLED') then
