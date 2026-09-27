@@ -64,6 +64,7 @@ export function AdminDashboardPage() {
   }
 
   const serving = data?.nowServing
+  const calledEntry = data?.entries.find((item) => item.status === 'CALLED') ?? null
   const upNext = data?.upNext ?? []
 
   const stats = useMemo(
@@ -92,7 +93,12 @@ export function AdminDashboardPage() {
             <Button onClick={() => void callNext()} loading={calling}>
               {calling ? 'Calling...' : 'Call next'}
             </Button>
-            <Button variant="outline" onClick={() => void serveNext()} loading={calling}>
+            <Button
+              variant={calledEntry ? 'default' : 'outline'}
+              className={calledEntry ? 'border-emerald-500 bg-emerald-600 text-white shadow-[0_0_18px_rgba(16,185,129,0.45)] ring-2 ring-emerald-300/70 animate-pulse' : ''}
+              onClick={() => void serveNext()}
+              loading={calling}
+            >
               Serve next
             </Button>
           </div>
@@ -116,6 +122,17 @@ export function AdminDashboardPage() {
                 <QueueNumber value={serving.queueNumber} size="lg" />
                 <p className="mt-2 text-sm font-medium">{serving.studentName}</p>
                 <p className="text-sm text-muted-foreground">{serving.purpose}</p>
+                {serving.status === 'CALLED' ? (
+                  <div className="mt-4 flex items-center justify-between gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+                    <span className="inline-flex items-center gap-2">
+                      <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                      Serve next number now
+                    </span>
+                    <Button className="h-8 bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => void serveNext()}>
+                      Serve now
+                    </Button>
+                  </div>
+                ) : null}
                 <div className="mt-4 flex flex-wrap gap-2">
                   {serving.status === 'CALLED' ? (
                     <Button variant="outline" onClick={() => void act(serving, 'recall')}>

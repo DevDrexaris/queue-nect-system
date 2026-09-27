@@ -121,6 +121,7 @@ export function AdminQueuePage() {
   if (error && !data) return <ErrorState title="Unable to load queue." description={error} onRetry={() => void reload()} />
 
   const serving = data?.nowServing
+  const calledEntry = data?.entries.find((item) => item.status === 'CALLED') ?? null
 
   return (
     <div>
@@ -132,7 +133,12 @@ export function AdminQueuePage() {
             <Button onClick={() => void callNext()} loading={calling}>
               {calling ? 'Calling...' : 'Call next'}
             </Button>
-            <Button variant="outline" onClick={() => void serveNext()} loading={calling}>
+            <Button
+              variant={calledEntry ? 'default' : 'outline'}
+              className={calledEntry ? 'border-emerald-500 bg-emerald-600 text-white shadow-[0_0_18px_rgba(16,185,129,0.45)] ring-2 ring-emerald-300/70 animate-pulse' : ''}
+              onClick={() => void serveNext()}
+              loading={calling}
+            >
               Serve next
             </Button>
             <Button variant="destructive" onClick={() => setResetPending(true)} loading={resetting}>
@@ -156,6 +162,17 @@ export function AdminQueuePage() {
                 <p className="mt-1 text-xs text-muted-foreground">Started: {formatTime(serving.calledAt)}</p>
               </div>
               <div className="flex flex-wrap gap-2">
+                {serving.status === 'CALLED' ? (
+                  <div className="flex w-full items-center justify-between gap-2 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-800 sm:w-auto">
+                    <span className="inline-flex items-center gap-2">
+                      <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                      Serve next number now
+                    </span>
+                    <Button className="h-8 bg-emerald-600 text-white hover:bg-emerald-700" onClick={() => void serveNext()}>
+                      Serve now
+                    </Button>
+                  </div>
+                ) : null}
                 {serving.status === 'CALLED' ? (
                   <Button variant="outline" onClick={() => void run('recall', serving)}>
                     Stop calling
