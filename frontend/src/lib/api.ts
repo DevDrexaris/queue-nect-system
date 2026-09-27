@@ -1,3 +1,5 @@
+export const DEFAULT_USER_MESSAGE = 'Unable to complete that action. Please try again.'
+
 export class ApiError extends Error {
   status: number
 
@@ -13,11 +15,9 @@ type RequestOptions = RequestInit & {
 }
 
 export async function apiRequest<T>(_path: string, _options: RequestOptions = {}): Promise<T> {
-  throw new ApiError('This app no longer uses the legacy PHP backend. Use the Supabase services layer instead.', 410)
+  throw new ApiError(DEFAULT_USER_MESSAGE, 410)
 }
 
-
-export function userMessage(error: unknown) {
-  if (error instanceof ApiError) return error.message
-  return 'Unable to complete that action. Please try again.'
+export function userMessage(_error: unknown) {
+  return DEFAULT_USER_MESSAGE
 }
