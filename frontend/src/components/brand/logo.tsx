@@ -37,7 +37,7 @@ export function BrandName({ className, size = 'md' }: BrandProps) {
       className={cn(
         'inline-flex items-center whitespace-nowrap font-semibold tracking-tight',
         'text-black',
-        'drop-shadow-[0_0_1px_rgba(15,23,42,0.35)]',
+        'drop-shadow-[0_0_4px_rgba(255,255,255,0.75)]',
         sizes[size].text,
         className,
       )}

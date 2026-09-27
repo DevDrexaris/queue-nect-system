@@ -83,13 +83,7 @@ export function TvDisplayPage() {
           <p className="text-center text-xl text-white/70">Loading queue...</p>
         ) : error ? (
           <p className="text-center text-xl text-white/70">Unable to load queue. Retrying...</p>
-        ) : !active ? (
-          <div className="flex flex-col items-center text-center">
-            <p className="text-sm font-medium tracking-[0.2em] text-white/50 uppercase">No active queue</p>
-            <p className="mt-4 max-w-xl text-2xl text-white/80">Please scan the QR code to join the queue.</p>
-            {qr ? <img src={qr} alt="Queue join QR code" className="mt-8 size-52 rounded-xl bg-white p-3" /> : null}
-          </div>
-        ) : (
+        ) : active ? (
           <div className="grid gap-10 xl:grid-cols-[1.4fr_0.6fr] xl:items-center">
             <section
               className={cn(
@@ -117,28 +111,49 @@ export function TvDisplayPage() {
                 </div>
               ) : null}
             </section>
-            <section>
-              <p className="text-sm font-medium tracking-[0.25em] text-white/50 uppercase">Next</p>
-              <ol className="mt-4 space-y-3">
-                {next.slice(0, 4).map((item) => (
-                  <li
-                    key={item.id}
-                    className={cn(
-                      'rounded-2xl px-5 py-4 font-mono text-3xl font-semibold tabular-nums lg:text-5xl transition-all',
-                      item.status === 'CALLED'
-                        ? 'border border-amber-300/70 bg-amber-400/15 text-amber-100 shadow-[0_0_20px_rgba(252,211,77,0.25)]'
-                        : 'bg-white/5 text-white',
-                    )}
-                  >
-                    <span className="flex items-center justify-between gap-2">
-                      <span>{item.queueNumber}</span>
-                      {item.status === 'CALLED' ? <span className="text-xs tracking-[0.2em] uppercase text-amber-200">Calling</span> : null}
-                    </span>
-                  </li>
-                ))}
-                {next.length === 0 ? <li className="text-white/50">No one waiting</li> : null}
-              </ol>
-            </section>
+
+            <div className="space-y-6">
+              <section className="rounded-3xl border border-white/10 bg-white/5 p-6 text-center">
+                <p className="text-sm font-medium tracking-[0.25em] text-white/50 uppercase">Scan to join</p>
+                {qr ? (
+                  <img src={qr} alt="Queue join QR code" className="mx-auto mt-5 size-44 rounded-2xl bg-white p-3 shadow-[0_0_18px_rgba(255,255,255,0.18)]" />
+                ) : (
+                  <div className="mt-5 flex h-44 items-center justify-center rounded-2xl border border-dashed border-white/15 bg-slate-950/20 text-sm text-white/60">
+                    QR unavailable
+                  </div>
+                )}
+                <p className="mt-4 text-sm text-white/70">Use your phone camera to join the queue.</p>
+              </section>
+
+              <section>
+                <p className="text-sm font-medium tracking-[0.25em] text-white/50 uppercase">Next</p>
+                <ol className="mt-4 space-y-3">
+                  {next.slice(0, 4).map((item) => (
+                    <li
+                      key={item.id}
+                      className={cn(
+                        'rounded-2xl px-5 py-4 font-mono text-3xl font-semibold tabular-nums lg:text-5xl transition-all',
+                        item.status === 'CALLED'
+                          ? 'border border-amber-300/70 bg-amber-400/15 text-amber-100 shadow-[0_0_20px_rgba(252,211,77,0.25)]'
+                          : 'bg-white/5 text-white',
+                      )}
+                    >
+                      <span className="flex items-center justify-between gap-2">
+                        <span>{item.queueNumber}</span>
+                        {item.status === 'CALLED' ? <span className="text-xs tracking-[0.2em] uppercase text-amber-200">Calling</span> : null}
+                      </span>
+                    </li>
+                  ))}
+                  {next.length === 0 ? <li className="text-white/50">No one waiting</li> : null}
+                </ol>
+              </section>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center text-center">
+            <p className="text-sm font-medium tracking-[0.2em] text-white/50 uppercase">No active queue</p>
+            <p className="mt-4 max-w-xl text-2xl text-white/80">Please scan the QR code to join the queue.</p>
+            {qr ? <img src={qr} alt="Queue join QR code" className="mt-8 size-52 rounded-xl bg-white p-3" /> : null}
           </div>
         )}
       </main>
