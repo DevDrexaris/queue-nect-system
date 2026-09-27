@@ -155,8 +155,13 @@ export function AdminDashboardPage() {
                   <Button variant="outline" onClick={() => void act(serving, 'skip')}>
                     Skip
                   </Button>
-                  <Button variant="ghost" onClick={() => void act(serving, 'recall')}>
-                    Set waiting
+                  <Button variant="outline" className="border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100" onClick={() => void act(serving, 'recall')}>
+                    <span className="inline-flex items-center gap-1.5">
+                      <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4">
+                        <path d="M12 6v6l4 2m4-2a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
+                      </svg>
+                      Set waiting
+                    </span>
                   </Button>
                 </div>
               </div>
