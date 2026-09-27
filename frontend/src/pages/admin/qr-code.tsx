@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import QRCode from 'qrcode'
-import { Download, Printer } from 'lucide-react'
+import { QRCodeSVG } from 'qrcode.react'
+import { Copy, Download, Printer, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '../../components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../../components/ui/card'
@@ -13,36 +13,60 @@ export function AdminQrCodePage() {
   const { user } = useAuth()
   const clinicName = user?.clinic?.name || 'Clinic'
   const identifier = user?.clinic?.identifier || 'clinic'
-  const [qr, setQr] = useState('')
   const [token, setToken] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [regenerating, setRegenerating] = useState(false)
+
+  async function loadQr() {
+    try {
+      setLoading(true)
+      const nextToken = await queueService.ensureAccessToken(identifier)
+      setToken(nextToken)
+    } catch {
+      setToken('')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    async function loadQr() {
-      try {
-        const nextToken = await queueService.ensureAccessToken(identifier)
-        setToken(nextToken)
-        const url = getQueueJoinUrl(identifier, nextToken)
-        const result = await QRCode.toDataURL(url, {
-          errorCorrectionLevel: 'H',
-          margin: 2,
-          width: 360,
-          color: { dark: '#0B2A4A', light: '#ffffff' },
-        })
-        setQr(result)
-      } catch {
-        setQr('')
-      }
-    }
-
     void loadQr()
   }, [identifier])
 
   const preview = useMemo(() => getQueueJoinUrl(identifier, token), [identifier, token])
 
+  async function regenerate() {
+    try {
+      setRegenerating(true)
+      const nextToken = await queueService.regenerateAccessToken(identifier)
+      setToken(nextToken)
+      toast.success('QR code regenerated successfully.')
+    } catch {
+      toast.error('Unable to complete that action. Please try again.')
+    } finally {
+      setRegenerating(false)
+    }
+  }
+
+  async function copyLink() {
+    if (!preview) return
+
+    try {
+      await navigator.clipboard.writeText(preview)
+      toast.success('Queue link copied.')
+    } catch {
+      toast.error('Unable to complete that action. Please try again.')
+    }
+  }
+
   function download() {
-    if (!qr) return
+    if (!preview) return
+
+    const canvas = document.getElementById('queue-qr-canvas') as HTMLCanvasElement | null
+    if (!canvas) return
+
     const link = document.createElement('a')
-    link.href = qr
+    link.href = canvas.toDataURL('image/png')
     link.download = `queue-nect-${identifier}.png`
     link.click()
     toast.success('QR code downloaded.')
@@ -52,14 +76,22 @@ export function AdminQrCodePage() {
     <div>
       <PageHeader
         title="QR Code"
-        description="Print this code so students can join the queue with their phone camera."
+        description="This organization has its own secure queue link and QR code."
         actions={
           <>
-            <Button variant="outline" onClick={download}>
+            <Button variant="outline" onClick={copyLink} disabled={!preview}>
+              <Copy className="size-4" />
+              Copy Link
+            </Button>
+            <Button variant="outline" onClick={download} disabled={!preview}>
               <Download className="size-4" />
               Download QR
             </Button>
-            <Button onClick={() => window.print()}>
+            <Button onClick={() => void regenerate()} loading={regenerating}>
+              <RefreshCw className="size-4" />
+              Regenerate QR
+            </Button>
+            <Button variant="secondary" onClick={() => window.print()}>
               <Printer className="size-4" />
               Print QR
             </Button>
@@ -74,11 +106,25 @@ export function AdminQrCodePage() {
             <CardDescription>Official Queue-Nect QR Code</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center">
-            {qr ? <img src={qr} alt={`QR code for ${preview}`} className="size-64 rounded-lg border border-border bg-white p-2" /> : null}
+            {loading ? (
+              <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">Loading QR code...</div>
+            ) : preview ? (
+              <div className="rounded-xl border border-border bg-white p-4">
+                <QRCodeSVG
+                  id="queue-qr-canvas"
+                  value={preview}
+                  size={250}
+                  bgColor="#ffffff"
+                  fgColor="#0B2A4A"
+                  level="H"
+                  includeMargin
+                />
+              </div>
+            ) : null}
             <p className="mt-4 max-w-sm text-center text-sm text-muted-foreground">
-              Students can scan this QR code using their phone's built-in camera or QR scanner to join the queue.
+              Students can scan this QR code to open the queue access link for this organization.
             </p>
-            <code className="mt-4 block w-full break-all rounded-lg bg-muted px-3 py-2 text-xs">{preview}</code>
+            <code className="mt-4 block w-full break-all rounded-lg bg-muted px-3 py-2 text-xs">{preview || 'Queue link unavailable'}</code>
             {isPlaceholderPublicUrl() ? (
               <p className="mt-3 text-sm text-amber-700">
                 Set VITE_PUBLIC_URL to your HTTPS domain before printing for production.

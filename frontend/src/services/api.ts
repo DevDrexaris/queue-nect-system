@@ -1,3 +1,4 @@
+import { getQueueJoinUrl } from '../lib/env'
 import { supabase } from '../lib/supabase'
 import type {
   AdminAccount,
@@ -60,8 +61,43 @@ async function getProfileByUserId(userId: string) {
   return data
 }
 
+function generateSecureQrToken(length = 32) {
+  const bytes = new Uint8Array(length)
+  crypto.getRandomValues(bytes)
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('').slice(0, length)
+}
+
 function getOrgIdFromClinicIdentifier(clinicIdentifier: string) {
   return supabase.from('organizations').select('*').eq('public_identifier', clinicIdentifier).maybeSingle()
+}
+
+async function createOrganizationQrToken(organizationId: string) {
+  const { data: existing, error: existingError } = await supabase
+    .from('organization_qr_tokens')
+    .select('*')
+    .eq('organization_id', organizationId)
+    .eq('is_active', true)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (existingError && existingError.code !== 'PGRST116') throw existingError
+  if (existing) return existing
+
+  const token = generateSecureQrToken(32)
+  const { data, error } = await supabase
+    .from('organization_qr_tokens')
+    .insert({
+      organization_id: organizationId,
+      token,
+      is_active: true,
+      expires_at: null,
+    })
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return data
 }
 
 export const queueService = {
@@ -82,16 +118,40 @@ export const queueService = {
     if (existingError && existingError.code !== 'PGRST116') throw existingError
     if (existing) return existing.token
 
-    const token = crypto.randomUUID().replace(/-/g, '')
-    const { error } = await supabase.from('organization_qr_tokens').insert({
-      organization_id: org.id,
-      token,
-      is_active: true,
-      expires_at: null,
-    })
+    const tokenRow = await createOrganizationQrToken(org.id)
+    return tokenRow.token
+  },
+  regenerateAccessToken: async (clinicIdentifier: string): Promise<string> => {
+    const { data: org, error: orgError } = await getOrgIdFromClinicIdentifier(clinicIdentifier)
+    if (orgError) throw orgError
+    if (!org) throw new Error('Clinic not found.')
 
-    if (error) throw error
-    return token
+    const { data: activeTokens, error: listError } = await supabase
+      .from('organization_qr_tokens')
+      .select('*')
+      .eq('organization_id', org.id)
+      .eq('is_active', true)
+
+    if (listError) throw listError
+
+    if (activeTokens && activeTokens.length > 0) {
+      const { error: deactivateError } = await supabase
+        .from('organization_qr_tokens')
+        .update({ is_active: false, updated_at: new Date().toISOString() })
+        .in('id', activeTokens.map((item) => item.id))
+
+      if (deactivateError) throw deactivateError
+    }
+
+    const tokenRow = await createOrganizationQrToken(org.id)
+    return tokenRow.token
+  },
+  getAccessTokenDetails: async (clinicIdentifier: string): Promise<{ token: string; link: string }> => {
+    const token = await queueService.ensureAccessToken(clinicIdentifier)
+    return {
+      token,
+      link: getQueueJoinUrl(clinicIdentifier, token),
+    }
   },
   validateAccessToken: async (token: string): Promise<{ clinicIdentifier: string; clinicName: string }> => {
     const { data, error } = await supabase
@@ -618,6 +678,8 @@ export const superAdminService = {
     }).select('*').single()
 
     if (error) throw error
+
+    await createOrganizationQrToken(data.id)
 
     return {
       id: data.id,
