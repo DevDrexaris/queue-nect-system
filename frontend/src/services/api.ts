@@ -72,8 +72,9 @@ async function getQueueClient() {
   return session ? supabase : supabaseAnon
 }
 
-function getOrgIdFromClinicIdentifier(clinicIdentifier: string) {
-  return supabaseAnon.from('organizations').select('*').eq('public_identifier', clinicIdentifier).maybeSingle()
+async function getOrgIdFromClinicIdentifier(clinicIdentifier: string) {
+  const client = await getQueueClient()
+  return client.from('organizations').select('*').eq('public_identifier', clinicIdentifier).maybeSingle()
 }
 
 async function createOrganizationQrToken(organizationId: string) {
