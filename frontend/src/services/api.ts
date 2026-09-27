@@ -722,7 +722,14 @@ export const queueService = {
 
   updateStatus: async (queueId: string, action: 'call' | 'serve' | 'skip' | 'cancel' | 'recall') => {
     const map: Record<string, Partial<any>> = {
-      call: { status: 'CALLED', called_at: new Date().toISOString() },
+      call: {
+        status: 'CALLED',
+        called_at: new Date().toISOString(),
+        started_at: null,
+        completed_at: null,
+        cancelled_at: null,
+        no_show_at: null,
+      },
       serve: { status: 'COMPLETED', completed_at: new Date().toISOString(), started_at: new Date().toISOString() },
       skip: { status: 'NO_SHOW', no_show_at: new Date().toISOString() },
       cancel: { status: 'CANCELLED', cancelled_at: new Date().toISOString() },

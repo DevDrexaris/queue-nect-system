@@ -267,6 +267,9 @@ export function AdminQueuePage() {
                         {item.status === 'CALLED' ? (
                           <ActionItem onClick={() => void run('recall', item)}>Stop calling</ActionItem>
                         ) : null}
+                        {item.status !== 'CANCELLED' && item.status !== 'NO_SHOW' && item.status !== 'SERVING' ? (
+                          <ActionItem onClick={() => void run('call', item)}>Call</ActionItem>
+                        ) : null}
                         {(item.status === 'COMPLETED' || item.status === 'SERVED') ? (
                           <ActionItem onClick={() => void run('recall', item)}>Restore to waiting</ActionItem>
                         ) : null}
@@ -296,6 +299,9 @@ export function AdminQueuePage() {
                   <ActionMenu label="Manage">
                     {item.status === 'CALLED' ? (
                       <ActionItem onClick={() => void run('recall', item)}>Stop calling</ActionItem>
+                    ) : null}
+                    {item.status !== 'CANCELLED' && item.status !== 'NO_SHOW' && item.status !== 'SERVING' ? (
+                      <ActionItem onClick={() => void run('call', item)}>Call</ActionItem>
                     ) : null}
                     {(item.status === 'COMPLETED' || item.status === 'SERVED') ? (
                       <ActionItem onClick={() => void run('recall', item)}>Restore to waiting</ActionItem>

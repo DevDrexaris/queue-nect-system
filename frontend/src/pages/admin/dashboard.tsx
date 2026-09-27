@@ -219,7 +219,9 @@ export function AdminDashboardPage() {
                         </TD>
                         <TD>
                           <ActionMenu>
-                            <ActionItem onClick={() => void queueService.updateStatus(item.id, 'call').then(reload)}>Call</ActionItem>
+                            {item.status !== 'CANCELLED' && item.status !== 'NO_SHOW' && item.status !== 'SERVING' ? (
+                              <ActionItem onClick={() => void queueService.updateStatus(item.id, 'call').then(reload)}>Call</ActionItem>
+                            ) : null}
                             <ActionItem onClick={() => void act(item, 'serve')}>Serve</ActionItem>
                             {(item.status === 'COMPLETED' || item.status === 'SERVED') ? (
                               <ActionItem onClick={() => void act(item, 'recall')}>Restore to waiting</ActionItem>
