@@ -18,8 +18,17 @@ export function TvDisplayPage() {
   const lastCalled = useRef<string | null>(null)
 
   useEffect(() => {
+    const previousOverflow = document.body.style.overflow
+    const previousHtmlOverflow = document.documentElement.style.overflow
+    document.body.style.overflow = 'hidden'
+    document.documentElement.style.overflow = 'hidden'
+
     const id = window.setInterval(() => setNow(new Date()), 1000)
-    return () => window.clearInterval(id)
+    return () => {
+      window.clearInterval(id)
+      document.body.style.overflow = previousOverflow
+      document.documentElement.style.overflow = previousHtmlOverflow
+    }
   }, [])
 
   useEffect(() => {

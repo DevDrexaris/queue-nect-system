@@ -1,5 +1,28 @@
 @import "tailwindcss";
 
+@font-face {
+  font-family: 'Eternalo';
+  src: url('./assets/Eternalo.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@keyframes tv-water-brand {
+  0% {
+    background-position: 0% 50%;
+    filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.35));
+  }
+  50% {
+    background-position: 100% 50%;
+    filter: drop-shadow(0 0 16px rgba(255, 255, 255, 0.55));
+  }
+  100% {
+    background-position: 0% 50%;
+    filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.42));
+  }
+}
+
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
@@ -134,6 +157,20 @@
   ::selection {
     background: color-mix(in srgb, var(--qn-accent) 22%, transparent);
   }
+}
+
+.tv-brand-wordmark {
+  display: inline-block;
+  font-family: 'Eternalo', serif;
+  letter-spacing: 0.02em;
+  background: linear-gradient(90deg, #040404 0%, #ffffff 18%, #080808 34%, #fafafa 52%, #090909 70%, #f5f5f5 100%);
+  background-size: 220% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.22));
+  animation: tv-water-brand 16s ease-in-out infinite;
 }
 
 @utility tabular {
