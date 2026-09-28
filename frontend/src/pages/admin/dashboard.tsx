@@ -4,34 +4,49 @@ import { toast } from 'sonner'
 import { Button } from '../../components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
 import { PageHeader } from '../../components/ui/page-header'
+import { Dialog } from '../../components/ui/dialog'
+import { Input } from '../../components/ui/input'
+import { Label } from '../../components/ui/field'
+import { Select } from '../../components/ui/select'
 import { QueueNumber } from '../../components/ui/queue-number'
 import { QueueStatusBadge } from '../../components/ui/queue-status-badge'
 import { QueueActionDialog, type ConfirmedQueueAction } from '../../components/ui/queue-action-dialog'
+import { Badge } from '../../components/ui/badge'
 import { StatCard } from '../../components/ui/stat-card'
 import { EmptyState, ErrorState, LoadingState } from '../../components/ui/states'
 import { ActionItem, ActionMenu } from '../../components/ui/action-menu'
 import { TBody, TD, TH, THead, TR, Table } from '../../components/ui/table'
 import { useAuth } from '../../hooks/use-auth'
+import { useAdminQueueScope } from '../../hooks/use-admin-queue-scope'
 import { useQueueSnapshot } from '../../hooks/use-queue-snapshot'
 import { greetingForNow, formatRelative } from '../../lib/format'
 import { userMessage } from '../../lib/api'
 import { queueService } from '../../services/api'
-import type { QueueEntry } from '../../types'
+import type { QueueAvailability, QueueEntry } from '../../types'
 
 export function AdminDashboardPage() {
   const { user } = useAuth()
+  const { locations, queues, selectedQueueId } = useAdminQueueScope()
   const clinicId = user?.clinic?.identifier
-  const { data, error, loading, reload } = useQueueSnapshot(clinicId, 8000)
+  const { data, error, loading, reload, updateAvailability } = useQueueSnapshot(clinicId, 8000, selectedQueueId)
   const [calling, setCalling] = useState(false)
   const [pendingAction, setPendingAction] = useState<{ entry: QueueEntry; action: ConfirmedQueueAction } | null>(null)
+  const [availabilityTarget, setAvailabilityTarget] = useState<Exclude<QueueAvailability, 'UNKNOWN'> | null>(null)
+  const [availabilitySaving, setAvailabilitySaving] = useState(false)
+  const [walkInOpen, setWalkInOpen] = useState(false)
+  const [walkInQueueId, setWalkInQueueId] = useState('')
+  const [walkInName, setWalkInName] = useState('')
+  const [walkInReference, setWalkInReference] = useState('')
+  const [walkInSaving, setWalkInSaving] = useState(false)
+  const [walkInEntry, setWalkInEntry] = useState<QueueEntry | null>(null)
 
   const today = data?.entries ?? []
 
   async function callNext() {
-    if (!clinicId) return
+    if (!clinicId || !selectedQueueId) return
     setCalling(true)
     try {
-      const entry = await queueService.callNext(clinicId)
+      const entry = await queueService.callNext(clinicId, selectedQueueId)
       toast.success(`Calling ${entry.queueNumber}`)
       await reload()
     } catch (caught) {
@@ -42,16 +57,83 @@ export function AdminDashboardPage() {
   }
 
   async function serveNext() {
-    if (!clinicId) return
+    if (!clinicId || !selectedQueueId) return
     setCalling(true)
     try {
-      const entry = await queueService.serveNext(clinicId)
+      const entry = await queueService.serveNext(clinicId, selectedQueueId)
       toast.success(`Now serving ${entry.queueNumber}`)
       await reload()
     } catch (caught) {
       toast.error(userMessage(caught))
     } finally {
       setCalling(false)
+    }
+  }
+
+  async function registerWalkIn() {
+    if (!walkInQueueId || !walkInName.trim()) return
+    const targetQueue = queues.find((queue) => queue.id === walkInQueueId && queue.isActive)
+    if (!targetQueue || targetQueue.admissionStatus !== 'OPEN') {
+      toast.error('The selected queue is not open for new registrations.')
+      return
+    }
+    setWalkInSaving(true)
+    try {
+      const entry = await queueService.registerWalkInPatient(walkInQueueId, walkInName.trim(), walkInReference)
+      setWalkInEntry(entry)
+      setWalkInName('')
+      setWalkInReference('')
+      toast.success(`Walk-in registered as ${entry.queueNumber}.`)
+      await reload()
+    } catch (caught) {
+      console.error('[Queue-Nect] Walk-in registration failed:', caught)
+      toast.error(userMessage(caught, 'staff'))
+    } finally {
+      setWalkInSaving(false)
+    }
+  }
+
+  function walkInTicketText(entry: QueueEntry) {
+    const targetQueue = queues.find((queue) => queue.id === entry.queueId)
+    const targetLocation = locations.find((item) => item.id === targetQueue?.locationId)
+    const queueLabel = `${targetLocation?.name ? `${targetLocation.name} · ` : ''}${targetQueue?.name || 'Queue'}`
+    return `${user?.clinic?.name || 'Queue-Nect'}\n${queueLabel}\nQueue number: ${entry.queueNumber}\nPatient: ${entry.studentName || ''}\n${new Date(entry.joinedAt).toLocaleString()}`
+  }
+
+  function printWalkInTicket() {
+    if (!walkInEntry) return
+    const printWindow = window.open('', '_blank', 'width=380,height=500')
+    if (!printWindow) {
+      toast.error('Allow pop-ups to print the queue ticket.')
+      return
+    }
+    const printDocument = printWindow.document
+    printDocument.title = `Queue ticket ${walkInEntry.queueNumber}`
+    const style = printDocument.createElement('style')
+    style.textContent = 'body{font-family:Arial,sans-serif;text-align:center;padding:24px;color:#111}h1{font-size:15px}strong{display:block;font-size:48px;margin:24px 0}p{font-size:14px}small{color:#555}'
+    const ticket = printDocument.createElement('main')
+    const clinic = printDocument.createElement('h1')
+    clinic.textContent = user?.clinic?.name || 'Queue-Nect'
+    const number = printDocument.createElement('strong')
+    number.textContent = walkInEntry.queueNumber
+    const patient = printDocument.createElement('p')
+    patient.textContent = walkInEntry.studentName || ''
+    const details = printDocument.createElement('small')
+    details.textContent = walkInTicketText(walkInEntry)
+    ticket.append(clinic, number, patient, details)
+    printDocument.body.replaceChildren(style, ticket)
+    printWindow.focus()
+    printWindow.print()
+  }
+
+  async function copyWalkInTicket() {
+    if (!walkInEntry) return
+    try {
+      await navigator.clipboard.writeText(walkInTicketText(walkInEntry))
+      toast.success('Queue ticket copied.')
+    } catch (caught) {
+      console.error('[Queue-Nect] Copy walk-in ticket failed:', caught)
+      toast.error('Unable to copy the ticket on this device.')
     }
   }
 
@@ -74,6 +156,58 @@ export function AdminDashboardPage() {
   const serving = data?.nowServing
   const calledEntry = data?.entries.find((item) => item.status === 'CALLED') ?? null
   const upNext = data?.upNext ?? []
+  const availability = data?.clinic.availability ?? 'UNKNOWN'
+
+  async function confirmAvailabilityChange() {
+    if (!selectedQueueId || !availabilityTarget) return
+    setAvailabilitySaving(true)
+    try {
+      const persisted = await queueService.setAvailability(selectedQueueId, availabilityTarget)
+      updateAvailability(persisted)
+      const message = persisted === 'OPEN'
+        ? 'Queue is open for new visitors.'
+        : persisted === 'PAUSED'
+          ? 'New registrations are paused.'
+          : 'Queue is closed to new visitors.'
+      toast.success(message)
+      setAvailabilityTarget(null)
+    } catch (caught) {
+      console.error('[Queue-Nect] Queue availability update failed:', caught)
+      toast.error(userMessage(caught, 'staff'))
+      await reload()
+    } finally {
+      setAvailabilitySaving(false)
+    }
+  }
+
+  const availabilityLabel = availability === 'UNKNOWN' ? 'Unavailable' : availability
+  const availabilityVariant = availability === 'OPEN'
+    ? 'success'
+    : availability === 'PAUSED'
+      ? 'warning'
+      : availability === 'CLOSED'
+        ? 'danger'
+        : 'outline'
+  const availabilityDialog = availabilityTarget === 'CLOSED'
+    ? {
+        title: 'Close Queue?',
+        description: 'New visitors will no longer be able to join. Existing queue entries will remain active and can still be managed by staff.',
+        cancel: 'Keep Open',
+        confirm: 'Close Queue',
+      }
+    : availabilityTarget === 'PAUSED'
+      ? {
+          title: 'Pause Queue?',
+          description: 'New registrations will temporarily stop. Existing patients will remain in the queue.',
+          cancel: 'Cancel',
+          confirm: 'Pause Queue',
+        }
+      : {
+          title: 'Open Queue?',
+          description: 'Students will be able to register through the organization QR code.',
+          cancel: availability === 'PAUSED' ? 'Keep Paused' : 'Keep Closed',
+          confirm: availability === 'PAUSED' ? 'Resume Queue' : 'Open Queue',
+        }
 
   const stats = useMemo(
     () => [
@@ -98,8 +232,16 @@ export function AdminDashboardPage() {
         description={user?.clinic?.name}
         actions={
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <Button size="sm" onClick={() => void callNext()} loading={calling}>
+            <Button size="sm" onClick={() => void callNext()} loading={calling} disabled={!selectedQueueId}>
               {calling ? 'Calling...' : 'Call next'}
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!queues.some((queue) => queue.isActive && queue.admissionStatus === 'OPEN')}
+              onClick={() => { setWalkInEntry(null); setWalkInQueueId(selectedQueueId ?? ''); setWalkInOpen(true) }}
+            >
+              Add Walk-in Patient
             </Button>
             <div className="relative">
               <Button
@@ -108,6 +250,7 @@ export function AdminDashboardPage() {
                 className={calledEntry ? 'border-status-calling/45 bg-status-calling/10 text-status-calling' : ''}
                 onClick={() => void serveNext()}
                 loading={calling}
+                disabled={!selectedQueueId}
               >
                 Serve next
               </Button>
@@ -127,6 +270,35 @@ export function AdminDashboardPage() {
           <StatCard key={stat.label} label={stat.label} value={stat.value} icon={stat.icon} />
         ))}
       </div>
+
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle>Queue Availability</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-muted-foreground">Current status</span>
+            <Badge variant={availabilityVariant}>{availabilityLabel}</Badge>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {availability === 'OPEN' ? (
+              <>
+                <Button variant="outline" onClick={() => setAvailabilityTarget('PAUSED')}>Pause Queue</Button>
+                <Button variant="destructive" onClick={() => setAvailabilityTarget('CLOSED')}>Close Queue</Button>
+              </>
+            ) : availability === 'PAUSED' ? (
+              <>
+                <Button onClick={() => setAvailabilityTarget('OPEN')}>Resume Queue</Button>
+                <Button variant="destructive" onClick={() => setAvailabilityTarget('CLOSED')}>Close Queue</Button>
+              </>
+            ) : availability === 'CLOSED' ? (
+              <Button onClick={() => setAvailabilityTarget('OPEN')}>Open Queue</Button>
+            ) : (
+              <span className="text-sm text-muted-foreground">Availability could not be verified. Controls are disabled.</span>
+            )}
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="mt-6 grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <Card>
@@ -258,6 +430,86 @@ export function AdminDashboardPage() {
         busy={calling}
         onClose={() => setPendingAction(null)}
         onConfirm={(entry, action) => void act(entry, action)}
+      />
+      <Dialog
+        open={walkInOpen}
+        onClose={() => { if (!walkInSaving) setWalkInOpen(false) }}
+        title={walkInEntry ? 'Walk-in Ticket' : 'Add Walk-in Patient'}
+        description={walkInEntry ? 'The patient has been added to the existing queue.' : 'Register a patient directly in this organization’s active queue.'}
+        footer={walkInEntry ? (
+          <>
+            <Button variant="outline" onClick={() => void copyWalkInTicket()}>Copy ticket</Button>
+            <Button variant="outline" onClick={printWalkInTicket}>Print ticket</Button>
+            <Button onClick={() => setWalkInOpen(false)}>Done</Button>
+          </>
+        ) : (
+          <>
+            <Button variant="outline" disabled={walkInSaving} onClick={() => setWalkInOpen(false)}>Cancel</Button>
+            <Button
+              type="submit"
+              form="walk-in-registration"
+              loading={walkInSaving}
+              disabled={!walkInName.trim() || !walkInQueueId || queues.find((queue) => queue.id === walkInQueueId)?.admissionStatus !== 'OPEN'}
+            >
+              Register Walk-in
+            </Button>
+          </>
+        )}
+      >
+        {walkInEntry ? (
+          <div className="rounded-lg border border-border bg-muted/40 p-5 text-center">
+            <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">Queue number</p>
+            <p className="mt-2 font-mono text-5xl font-bold tabular-nums text-foreground">{walkInEntry.queueNumber}</p>
+            <p className="mt-3 font-medium">{walkInEntry.studentName}</p>
+            <p className="mt-1 text-sm text-muted-foreground">Waiting</p>
+          </div>
+        ) : (
+          <form
+            id="walk-in-registration"
+            className="space-y-4"
+            onSubmit={(event) => { event.preventDefault(); void registerWalkIn() }}
+          >
+            <div>
+              <Label htmlFor="walk-in-queue">Location / Queue</Label>
+              <Select id="walk-in-queue" value={walkInQueueId} required onChange={(event) => setWalkInQueueId(event.target.value)}>
+                <option value="" disabled>Select a queue</option>
+                {queues.filter((queue) => queue.isActive).map((queue) => (
+                  <option key={queue.id} value={queue.id} disabled={queue.admissionStatus !== 'OPEN'}>
+                    {locations.find((location) => location.id === queue.locationId)?.name || 'Location'} · {queue.name} ({queue.admissionStatus})
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="walk-in-name">Patient name</Label>
+              <Input id="walk-in-name" autoComplete="name" maxLength={120} value={walkInName} onChange={(event) => setWalkInName(event.target.value)} required />
+            </div>
+            <div>
+              <Label htmlFor="walk-in-reference">Patient / reference ID (optional)</Label>
+              <Input id="walk-in-reference" autoComplete="off" maxLength={80} value={walkInReference} onChange={(event) => setWalkInReference(event.target.value)} />
+            </div>
+          </form>
+        )}
+      </Dialog>
+      <Dialog
+        open={Boolean(availabilityTarget)}
+        onClose={() => { if (!availabilitySaving) setAvailabilityTarget(null) }}
+        title={availabilityDialog.title}
+        description={availabilityDialog.description}
+        footer={
+          <>
+            <Button variant="outline" disabled={availabilitySaving} onClick={() => setAvailabilityTarget(null)}>
+              {availabilityDialog.cancel}
+            </Button>
+            <Button
+              variant={availabilityTarget === 'CLOSED' ? 'destructive' : 'default'}
+              loading={availabilitySaving}
+              onClick={() => void confirmAvailabilityChange()}
+            >
+              {availabilitySaving ? 'Saving...' : availabilityDialog.confirm}
+            </Button>
+          </>
+        }
       />
     </div>
   )

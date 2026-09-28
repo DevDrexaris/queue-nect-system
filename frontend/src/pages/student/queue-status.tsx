@@ -115,7 +115,7 @@ export function QueueStatusPage() {
     try {
       const [nextEntry, nextSnapshot] = await Promise.all([
         queueService.getEntry(ticket.clinicIdentifier, ticket.queueId),
-        queueService.getSnapshot(ticket.clinicIdentifier),
+        queueService.getSnapshot(ticket.clinicIdentifier, ticket.serviceQueueId),
       ])
       if (requestId !== requestIdRef.current) return
 

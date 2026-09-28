@@ -6,6 +6,15 @@ const messages: Record<string, (queueNumber: string) => string> = {
   QUEUE_JOINED: (number) => `${number} joined the queue.`,
   QUEUE_CALLED: (number) => `${number} is now being called.`,
   QUEUE_SERVING: (number) => `${number} started service.`,
+  QUEUE_AVAILABILITY_OPENED: () => 'Staff opened the queue.',
+  QUEUE_AVAILABILITY_PAUSED: () => 'Staff paused new queue registrations.',
+  QUEUE_AVAILABILITY_CLOSED: () => 'Staff closed the queue.',
+  LOCATION_CREATED: (name) => `Staff added ${name}.`,
+  LOCATION_UPDATED: (name) => `Staff updated ${name}.`,
+  LOCATION_ARCHIVED: (name) => `Staff archived ${name}.`,
+  QUEUE_CREATED: (name) => `Staff added the ${name} queue.`,
+  QUEUE_UPDATED: (name) => `Staff updated the ${name} queue.`,
+  QUEUE_ARCHIVED: (name) => `Staff archived the ${name} queue.`,
   QUEUE_COMPLETED: (number) => `${number} completed service.`,
   QUEUE_CANCELLED_BY_STUDENT: (number) => `${number} cancelled their queue.`,
   QUEUE_CANCELLED_BY_ADMIN: (number) => `${number} was cancelled by staff.`,
@@ -27,7 +36,7 @@ function eventTone(action: string) {
 }
 
 function eventText(event: AdminActivityEvent) {
-  const number = event.details?.queue_number || 'Queue'
+  const number = event.details?.queue_number || event.details?.name || 'Queue'
   return messages[event.action]?.(number) ?? 'Queue activity updated.'
 }
 

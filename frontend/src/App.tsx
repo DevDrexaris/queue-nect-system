@@ -16,6 +16,7 @@ import { AdminLoginPage } from './pages/admin/login'
 import { AdminDashboardPage } from './pages/admin/dashboard'
 import { AdminQueuePage } from './pages/admin/queue'
 import { AdminStudentsPage } from './pages/admin/students'
+import { AdminLocationsPage } from './pages/admin/locations'
 import { AdminHistoryPage } from './pages/admin/history'
 import { AdminAnalyticsPage } from './pages/admin/analytics'
 import { AdminQrCodePage } from './pages/admin/qr-code'
@@ -68,6 +69,7 @@ export default function App() {
               <Route index element={<AdminDashboardPage />} />
               <Route path="queue" element={<AdminQueuePage />} />
               <Route path="students" element={<AdminStudentsPage />} />
+              <Route path="locations" element={<AdminLocationsPage />} />
               <Route path="history" element={<AdminHistoryPage />} />
               <Route path="analytics" element={<AdminAnalyticsPage />} />
               <Route path="qr-code" element={<AdminQrCodePage />} />

@@ -111,3 +111,8 @@ begin
   return new;
 end;
 $$;
+
+drop trigger if exists queue_entries_activity_broadcast on public.queue_entries;
+create trigger queue_entries_activity_broadcast
+after insert or update on public.queue_entries
+for each row execute function public.log_queue_activity_and_broadcast();

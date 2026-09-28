@@ -3,6 +3,7 @@ const KEY = 'qn.student-ticket'
 export type StoredTicket = {
   clinicIdentifier: string
   queueId: string
+  serviceQueueId?: string
   queueNumber: string
   statusToken?: string
 }

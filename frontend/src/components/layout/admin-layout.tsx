@@ -7,6 +7,7 @@ import {
   LayoutDashboard,
   ListOrdered,
   LogOut,
+  MapPin,
   Menu,
   QrCode,
   Settings,
@@ -16,6 +17,7 @@ import {
 import { Logo } from '../brand/logo'
 import { Button } from '../ui/button'
 import { ConnectionBanner } from '../ui/connection-banner'
+import { Select } from '../ui/select'
 import { useAuth } from '../../hooks/use-auth'
 import { useOnlineStatus } from '../../hooks/use-online-status'
 import { SidebarNav, type NavSection } from './sidebar-nav'
@@ -24,6 +26,9 @@ import { ActivityLogsPanel } from '../ui/activity-logs-panel'
 import { useAdminRealtime } from '../../hooks/use-admin-realtime'
 import { AdminRealtimeContext } from '../../providers/admin-realtime-context'
 import { toast } from 'sonner'
+import { organizationStructureService } from '../../services/api'
+import { AdminQueueScopeContext } from '../../providers/admin-queue-scope-context'
+import type { OrganizationLocation, OrganizationQueue } from '../../types'
 
 const sections: NavSection[] = [
   {
@@ -37,6 +42,7 @@ const sections: NavSection[] = [
     title: 'Management',
     items: [
       { to: '/admin/students', label: 'Students', icon: Users },
+      { to: '/admin/locations', label: 'Locations & Queues', icon: MapPin },
       { to: '/admin/history', label: 'Queue History', icon: History },
       { to: '/admin/analytics', label: 'Analytics', icon: BarChart3 },
     ],
@@ -55,6 +61,7 @@ const titles: Record<string, string> = {
   '/admin': 'Dashboard',
   '/admin/queue': 'Queue Management',
   '/admin/students': 'Students',
+  '/admin/locations': 'Locations & Queues',
   '/admin/history': 'Queue History',
   '/admin/analytics': 'Analytics',
   '/admin/qr-code': 'QR Code',
@@ -72,12 +79,58 @@ export function AdminLayout() {
   const navigate = useNavigate()
   const online = useOnlineStatus()
   const organizationId = user?.clinic?.id
-  const realtime = useAdminRealtime(organizationId)
+  const [locations, setLocations] = useState<OrganizationLocation[]>([])
+  const [queues, setQueues] = useState<OrganizationQueue[]>([])
+  const [selectedQueueId, setSelectedQueueId] = useState<string>()
+  const realtime = useAdminRealtime(organizationId, selectedQueueId, user?.role === 'STAFF')
   const activeCount = realtime.presence.filter((item) =>
     item.presence === 'BACKGROUND'
       || (item.presence !== 'OFFLINE' && realtime.now - new Date(item.last_seen_at).getTime() <= 90_000),
   ).length
   const title = titles[location.pathname] || 'Admin'
+     const visibleQueues = queues.filter((item) => user?.role !== 'STAFF'
+    || (user.clinic?.queueId ? item.id === user.clinic.queueId
+      : user.clinic?.locationId ? item.locationId === user.clinic.locationId
+           : false))
+  const visibleLocations = locations.filter((item) => user?.role !== 'STAFF'
+    || visibleQueues.some((queue) => queue.locationId === item.id))
+
+  async function reloadQueueCatalog() {
+    if (!organizationId) return
+    try {
+      const catalog = await organizationStructureService.list(organizationId)
+      setLocations(catalog.locations)
+      setQueues(catalog.queues)
+      const scopedQueues = catalog.queues.filter((item) => user?.role !== 'STAFF'
+        || (user.clinic?.queueId ? item.id === user.clinic.queueId
+          : user.clinic?.locationId ? item.locationId === user.clinic.locationId
+             : false))
+      setSelectedQueueId((current) => {
+        const stored = localStorage.getItem(`qn.selected-queue.${organizationId}`)
+        const next = scopedQueues.some((item) => item.id === current && item.isActive)
+          ? current
+          : stored && scopedQueues.some((item) => item.id === stored && item.isActive)
+            ? stored
+            : scopedQueues.find((item) => item.isDefault && item.isActive)?.id
+              ?? scopedQueues.find((item) => item.isActive)?.id
+        return next ?? undefined
+      })
+    } catch (caught) {
+      console.error('[Queue-Nect] Queue catalog load failed:', caught)
+      setLocations([])
+      setQueues([])
+      setSelectedQueueId(undefined)
+    }
+  }
+
+  function selectQueue(queueId: string) {
+    setSelectedQueueId(queueId)
+    if (organizationId) localStorage.setItem(`qn.selected-queue.${organizationId}`, queueId)
+  }
+
+  useEffect(() => {
+    void reloadQueueCatalog()
+  }, [organizationId])
 
   useEffect(() => {
     const onShortcut = (event: KeyboardEvent) => {
@@ -147,6 +200,18 @@ export function AdminLayout() {
               <h1 className="truncate text-base font-semibold">{title}</h1>
               <p className="truncate text-xs text-muted-foreground">{user?.clinic?.name || 'Clinic'}</p>
             </div>
+            {visibleQueues.filter((item) => item.isActive).length > 0 ? (
+              <Select
+                aria-label="Active queue"
+                className="h-9 w-36 sm:w-52"
+                value={selectedQueueId ?? ''}
+                onChange={(event) => selectQueue(event.target.value)}
+              >
+                {visibleQueues.filter((item) => item.isActive).map((item) => (
+                  <option key={item.id} value={item.id}>{item.name} · {visibleLocations.find((location) => location.id === item.locationId)?.name ?? 'Location'}</option>
+                ))}
+              </Select>
+            ) : null}
             <span className="hidden items-center gap-2 text-xs text-muted-foreground sm:inline-flex" title={online ? 'Connected' : 'Offline'}>
               <span className={`size-2 rounded-full ${online ? 'bg-emerald-500' : 'bg-amber-500'}`} />
               {online ? 'Online' : 'Offline'}
@@ -181,7 +246,9 @@ export function AdminLayout() {
           </header>
           <main className="flex-1 p-4 sm:p-6">
             <AdminRealtimeContext.Provider value={realtime}>
-              <Outlet />
+              <AdminQueueScopeContext.Provider value={{ locations: visibleLocations, queues: visibleQueues, selectedQueueId, selectQueue, reloadQueueCatalog }}>
+                <Outlet />
+              </AdminQueueScopeContext.Provider>
             </AdminRealtimeContext.Provider>
           </main>
         </div>

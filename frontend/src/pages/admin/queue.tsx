@@ -15,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/ca
 import { ActionItem, ActionMenu } from '../../components/ui/action-menu'
 import { TBody, TD, TH, THead, TR, Table } from '../../components/ui/table'
 import { useAuth } from '../../hooks/use-auth'
+import { useAdminQueueScope } from '../../hooks/use-admin-queue-scope'
 import { useQueueSnapshot } from '../../hooks/use-queue-snapshot'
 import { useAdminRealtimeContext } from '../../hooks/use-admin-realtime-context'
 import { formatTime, formatWait } from '../../lib/format'
@@ -24,8 +25,9 @@ import { QUEUE_STATUSES, formatQueueStatusLabel, type QueueEntry, type QueueStat
 
 export function AdminQueuePage() {
   const { user } = useAuth()
+  const { selectedQueueId } = useAdminQueueScope()
   const clinicId = user?.clinic?.identifier
-  const { data, error, loading, reload } = useQueueSnapshot(clinicId, 8000)
+  const { data, error, loading, reload } = useQueueSnapshot(clinicId, 8000, selectedQueueId)
   const realtime = useAdminRealtimeContext()
   const presenceById = new Map(realtime.presence.map((item) => [item.queue_entry_id, item]))
   const [query, setQuery] = useState('')
@@ -45,10 +47,10 @@ export function AdminQueuePage() {
   })
 
   async function callNext() {
-    if (!clinicId) return
+    if (!clinicId || !selectedQueueId) return
     setCalling(true)
     try {
-      const entry = await queueService.callNext(clinicId)
+      const entry = await queueService.callNext(clinicId, selectedQueueId)
       toast.success(`Calling ${entry.queueNumber}`)
       await reload()
     } catch (caught) {
@@ -59,10 +61,10 @@ export function AdminQueuePage() {
   }
 
   async function serveNext() {
-    if (!clinicId) return
+    if (!clinicId || !selectedQueueId) return
     setCalling(true)
     try {
-      const entry = await queueService.serveNext(clinicId)
+      const entry = await queueService.serveNext(clinicId, selectedQueueId)
       toast.success(`Now serving ${entry.queueNumber}`)
       await reload()
     } catch (caught) {
@@ -100,11 +102,11 @@ export function AdminQueuePage() {
   }
 
   async function resetQueue() {
-    if (!clinicId) return
+    if (!clinicId || !selectedQueueId) return
     setResetting(true)
     try {
-      await queueService.resetQueue(clinicId)
-      toast.success('Queue number reset to A001 for this session.')
+      const result = await queueService.resetQueue(clinicId, selectedQueueId)
+      toast.success(`Queue number reset to ${result.queuePrefix}001 for this session.`)
       setResetPending(false)
       setResetConfirmed(false)
       await reload()

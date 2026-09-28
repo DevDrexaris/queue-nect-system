@@ -8,11 +8,14 @@ import { PageHeader } from '../../components/ui/page-header'
 import { useAuth } from '../../hooks/use-auth'
 import { getQueueJoinUrl, isPlaceholderPublicUrl } from '../../lib/env'
 import { queueService } from '../../services/api'
+import { useAdminQueueScope } from '../../hooks/use-admin-queue-scope'
 
 export function AdminQrCodePage() {
   const { user } = useAuth()
+  const { queues, selectedQueueId } = useAdminQueueScope()
   const clinicName = user?.clinic?.name || 'Clinic'
   const identifier = user?.clinic?.identifier || 'clinic'
+  const selectedQueue = queues.find((item) => item.id === selectedQueueId)
   const [token, setToken] = useState('')
   const [loading, setLoading] = useState(true)
   const [regenerating, setRegenerating] = useState(false)
@@ -20,7 +23,8 @@ export function AdminQrCodePage() {
   async function loadQr() {
     try {
       setLoading(true)
-      const nextToken = await queueService.ensureAccessToken(identifier)
+      if (!selectedQueueId) throw new Error('Select a queue first.')
+      const nextToken = await queueService.ensureAccessToken(identifier, selectedQueueId)
       setToken(nextToken)
     } catch {
       setToken('')
@@ -31,10 +35,10 @@ export function AdminQrCodePage() {
 
   useEffect(() => {
     void loadQr()
-  }, [identifier])
+  }, [identifier, selectedQueueId])
 
   const preview = useMemo(() => getQueueJoinUrl(identifier, token), [identifier, token])
-  const displayUrl = useMemo(() => `/tv/${encodeURIComponent(identifier)}`, [identifier])
+  const displayUrl = useMemo(() => `/tv/${encodeURIComponent(identifier)}?queue=${encodeURIComponent(selectedQueueId || '')}`, [identifier, selectedQueueId])
 
   function openTvDisplay() {
     window.open(displayUrl, '_blank', 'noopener,noreferrer')
@@ -43,7 +47,8 @@ export function AdminQrCodePage() {
   async function regenerate() {
     try {
       setRegenerating(true)
-      const nextToken = await queueService.regenerateAccessToken(identifier)
+      if (!selectedQueueId) throw new Error('Select a queue first.')
+      const nextToken = await queueService.regenerateAccessToken(identifier, selectedQueueId)
       setToken(nextToken)
       toast.success('QR code regenerated successfully.')
     } catch {
@@ -110,8 +115,8 @@ export function AdminQrCodePage() {
       <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
         <Card>
           <CardHeader>
-            <CardTitle>{clinicName}</CardTitle>
-            <CardDescription>Official Queue-Nect QR Code</CardDescription>
+            <CardTitle>{selectedQueue?.name || clinicName}</CardTitle>
+            <CardDescription>{selectedQueue?.locationName || clinicName} · Queue-Nect QR Code</CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col items-center">
             {loading ? (
@@ -130,7 +135,7 @@ export function AdminQrCodePage() {
               </div>
             ) : null}
             <p className="mt-4 max-w-sm text-center text-sm text-muted-foreground">
-              Students can scan this QR code to open the queue access link for this organization.
+              Students can scan this QR code to join {selectedQueue?.name || 'the selected queue'} at {selectedQueue?.locationName || clinicName}.
             </p>
             <code className="mt-4 block w-full break-all rounded-lg bg-muted px-3 py-2 text-xs">{preview || 'Queue link unavailable'}</code>
             {isPlaceholderPublicUrl() ? (

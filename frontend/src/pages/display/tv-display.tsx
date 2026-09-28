@@ -13,7 +13,8 @@ export function TvDisplayPage() {
   const { clinicId } = useParams()
   const [params] = useSearchParams()
   const identifier = clinicId || params.get('clinic') || ''
-  const { data, error, loading } = useQueueSnapshot(identifier || undefined, 3000)
+  const queueId = params.get('queue') || undefined
+  const { data, error, loading } = useQueueSnapshot(identifier || undefined, 3000, queueId)
   const [now, setNow] = useState(() => new Date())
   const [qr, setQr] = useState('')
   const [queueEvent, setQueueEvent] = useState<{ kind: QueueEventKind; sequence: number } | null>(null)
@@ -47,7 +48,7 @@ export function TvDisplayPage() {
 
     async function generateQr() {
       try {
-        const { link } = await queueService.issueAccessToken(identifier)
+        const { link } = await queueService.issueAccessToken(identifier, queueId)
         const dataUrl = await QRCode.toDataURL(link, {
           errorCorrectionLevel: 'H',
           margin: 1,
@@ -61,14 +62,16 @@ export function TvDisplayPage() {
     }
 
     void generateQr()
-  }, [identifier])
+  }, [identifier, queueId])
 
   const serving = data?.entries.find((entry) => entry.status === 'SERVING') ?? null
   const calling = data?.entries.find((entry) => entry.status === 'CALLED') ?? null
-  const primary = calling ?? serving
-  const next = [...(calling ? [calling] : []), ...(data?.entries.filter((entry) => entry.status === 'WAITING') ?? [])].slice(0, 4)
-  const active = Boolean(serving || calling || next.length)
+  const awaitingReturn = data?.entries.find((entry) => entry.status === 'AWAITING_RETURN') ?? null
+  const primary = calling ?? serving ?? awaitingReturn
+  const next = [...(calling ? [calling] : []), ...(data?.entries.filter((entry) => entry.status === 'WAITING' || entry.status === 'AWAITING_RETURN') ?? [])].slice(0, 4)
+  const active = Boolean(serving || calling || awaitingReturn || next.length)
   const isCalling = Boolean(calling)
+  const availability = data?.clinic.availability ?? 'UNKNOWN'
   const primaryId = primary?.id
   const primaryQueueNumber = primary?.queueNumber
   const primaryStatus = primary?.status
@@ -76,7 +79,7 @@ export function TvDisplayPage() {
     ? buildQueueAnnouncement({
         queueNumber: primaryQueueNumber,
         organizationName: data.clinic.name,
-        serviceArea: data.clinic.announcementServiceArea || 'the service desk',
+        serviceArea: data.clinic.serviceArea || data.clinic.announcementServiceArea || 'the service desk',
         useCustom: data.clinic.announcementUseCustom ?? false,
         template: data.clinic.announcementTemplate || 'Queue {queue_number}, please proceed to {service_area}.',
       })
@@ -124,7 +127,7 @@ export function TvDisplayPage() {
       text: buildQueueAnnouncement({
         queueNumber: calling.queueNumber,
         organizationName: clinic.name,
-        serviceArea: clinic.announcementServiceArea || 'the service desk',
+        serviceArea: clinic.serviceArea || clinic.announcementServiceArea || 'the service desk',
         useCustom: clinic.announcementUseCustom ?? false,
         template: clinic.announcementTemplate || 'Queue {queue_number}, please proceed to {service_area}.',
         speech: true,
@@ -140,7 +143,8 @@ export function TvDisplayPage() {
       <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
         <div>
           <Logo inverted size="lg" />
-          <h1 className="mt-4 text-2xl font-semibold tracking-tight sm:text-3xl lg:text-5xl">{data?.clinic.name || identifier || 'Clinic Display'}</h1>
+          <h1 className="mt-4 text-2xl font-semibold tracking-tight sm:text-3xl lg:text-5xl">{data?.clinic.queueName || data?.clinic.name || identifier || 'Clinic Display'}</h1>
+          {data?.clinic.locationName ? <p className="mt-2 text-sm text-muted-foreground">{data.clinic.locationName} · {data.clinic.name}</p> : null}
         </div>
         <div className="flex w-full items-center justify-end gap-3 sm:w-auto sm:flex-col sm:items-end">
           <div className="text-right">
@@ -153,6 +157,15 @@ export function TvDisplayPage() {
       </header>
 
       <main className="flex flex-1 flex-col justify-center py-8">
+        {data && availability !== 'OPEN' ? (
+          <div className="mb-6 rounded-xl border border-border bg-card px-4 py-3 text-center text-sm text-muted-foreground" role="status">
+            {availability === 'PAUSED'
+              ? 'New queue registrations are temporarily paused.'
+              : availability === 'CLOSED'
+                ? 'The clinic is currently closed to new queue registrations.'
+                : 'Queue admission status is temporarily unavailable.'}
+          </div>
+        ) : null}
         {!identifier ? (
           <p className="text-center text-2xl text-muted-foreground">Open /display/CLINIC_IDENTIFIER to start the waiting room screen.</p>
         ) : loading ? (
@@ -170,7 +183,7 @@ export function TvDisplayPage() {
               )}
             >
               <div className={cn('mb-3 flex items-center justify-center gap-2 text-sm font-medium tracking-[0.25em] uppercase', isCalling ? 'text-status-calling' : 'text-status-serving')}>
-                <span>{isCalling ? 'Calling' : 'Now serving'}</span>
+                <span>{isCalling ? 'Calling' : primary?.status === 'AWAITING_RETURN' ? 'Awaiting return' : 'Now serving'}</span>
                 {isCalling ? <span className="size-2.5 animate-pulse rounded-full bg-status-calling" /> : null}
               </div>
               <div className="mt-4 flex justify-center">
@@ -200,7 +213,7 @@ export function TvDisplayPage() {
 
             <div className="space-y-6">
               <section className="rounded-3xl border border-border bg-card p-6 text-center">
-                <p className="text-sm font-medium tracking-[0.25em] text-muted-foreground uppercase">Scan to join</p>
+                <p className="text-sm font-medium tracking-[0.25em] text-muted-foreground uppercase">{availability === 'OPEN' ? 'Scan to join' : 'Queue QR code'}</p>
                 {qr ? (
                   <img src={qr} alt="Queue join QR code" className="mx-auto mt-5 size-44 rounded-2xl bg-white p-3 shadow-sm" />
                 ) : (
@@ -208,7 +221,7 @@ export function TvDisplayPage() {
                     QR unavailable
                   </div>
                 )}
-                <p className="mt-4 text-sm text-muted-foreground">Use your phone camera to join the queue.</p>
+                <p className="mt-4 text-sm text-muted-foreground">{availability === 'OPEN' ? 'Use your phone camera to join the queue.' : 'Admission is unavailable; existing queue entries remain active.'}</p>
               </section>
 
               <section>
@@ -241,8 +254,8 @@ export function TvDisplayPage() {
           </div>
         ) : (
           <div className="flex flex-col items-center text-center">
-            <p className="text-sm font-medium tracking-[0.2em] text-muted-foreground uppercase">No active queue</p>
-            <p className="mt-4 max-w-xl text-2xl text-foreground">Please scan the QR code to join the queue.</p>
+            <p className="text-sm font-medium tracking-[0.2em] text-muted-foreground uppercase">{availability === 'PAUSED' ? 'Queue paused' : availability === 'CLOSED' ? 'Queue closed' : 'No active queue'}</p>
+            <p className="mt-4 max-w-xl text-2xl text-foreground">{availability === 'PAUSED' ? 'New registrations are temporarily paused.' : availability === 'CLOSED' ? 'The clinic is not accepting new queue entries right now.' : availability === 'OPEN' ? 'Please scan the QR code to join the queue.' : 'Queue availability could not be verified.'}</p>
             {qr ? <img src={qr} alt="Queue join QR code" className="mt-8 size-52 rounded-xl bg-white p-3" /> : null}
           </div>
         )}

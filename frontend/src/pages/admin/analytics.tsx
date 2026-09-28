@@ -5,6 +5,7 @@ import { SimpleBarChart } from '../../components/ui/simple-bar-chart'
 import { StatCard } from '../../components/ui/stat-card'
 import { ErrorState, LoadingState } from '../../components/ui/states'
 import { useAuth } from '../../hooks/use-auth'
+import { useAdminQueueScope } from '../../hooks/use-admin-queue-scope'
 import { useAdminRealtimeContext } from '../../hooks/use-admin-realtime-context'
 import { analyticsService } from '../../services/api'
 import { formatWait } from '../../lib/format'
@@ -33,6 +34,7 @@ type Analytics = {
 
 export function AdminAnalyticsPage() {
   const { user } = useAuth()
+  const { selectedQueueId } = useAdminQueueScope()
   const { queueRevision } = useAdminRealtimeContext()
   const clinicId = user?.clinic?.identifier
   const [fromDate, setFromDate] = useState(() => localDateValue(new Date()))
@@ -51,7 +53,13 @@ export function AdminAnalyticsPage() {
 
     setLoading(true)
     try {
-      const summary = await analyticsService.summary(clinicId, fromDate, toDate)
+      const summary = await analyticsService.summary(
+        clinicId,
+        fromDate,
+        toDate,
+        selectedQueueId,
+        user?.role === 'STAFF',
+      )
       setData(summary)
       setError(null)
     } catch (caught) {
@@ -60,7 +68,7 @@ export function AdminAnalyticsPage() {
     } finally {
       setLoading(false)
     }
-  }, [clinicId, fromDate, toDate])
+  }, [clinicId, fromDate, toDate, selectedQueueId, user?.role])
 
   useEffect(() => {
     void load()

@@ -44,6 +44,39 @@ export type YearLevel = (typeof YEAR_LEVELS)[number]
 
 export const USER_ROLES = ['ADMIN', 'ORG_ADMIN', 'STAFF', 'SUPER_ADMIN'] as const
 export type UserRole = (typeof USER_ROLES)[number]
+export type QueueAvailability = 'OPEN' | 'PAUSED' | 'CLOSED' | 'UNKNOWN'
+export type LocationType = 'Building' | 'Clinic' | 'Branch' | 'Department' | 'Other'
+
+export type OrganizationLocation = {
+  id: string
+  organizationId: string
+  name: string
+  locationType: LocationType
+  description?: string | null
+  addressOrFloor?: string | null
+  contactInformation?: string | null
+  isActive: boolean
+  isDefault: boolean
+}
+
+export type OrganizationQueue = {
+  id: string
+  organizationId: string
+  locationId: string
+  locationName?: string
+  name: string
+  queuePrefix: string
+  publicIdentifier: string
+  description?: string | null
+  serviceArea?: string | null
+  admissionStatus: Exclude<QueueAvailability, 'UNKNOWN'>
+  openingTime?: string | null
+  closingTime?: string | null
+  timeZone?: string | null
+  operatingDays?: number[] | null
+  isActive: boolean
+  isDefault: boolean
+}
 
 export type Clinic = {
   id: string
@@ -53,6 +86,12 @@ export type Clinic = {
   address?: string
   contact?: string
   queuePrefix?: string
+  queueId?: string
+  locationId?: string
+  queueName?: string
+  locationName?: string
+  serviceArea?: string | null
+  availability?: QueueAvailability
   announcement?: string
   announcementsEnabled?: boolean
   announcementUseCustom?: boolean
@@ -66,6 +105,7 @@ export type Clinic = {
 export type QueueEntry = {
   id: string
   clinicId: string
+  queueId?: string
   queueNumber: string
   studentId?: string
   studentName?: string
@@ -119,6 +159,8 @@ export type AdminAccount = {
   email: string
   role: UserRole
   organizationId?: string
+  locationId?: string
+  queueId?: string
   clinicName?: string
   status: 'active' | 'disabled'
 }
