@@ -16,7 +16,7 @@ export function StatCard({
     <Card className="p-5">
       <div className="flex items-start justify-between gap-3">
         <p className="text-sm font-medium text-muted-foreground">{label}</p>
-        {Icon ? <Icon className="size-[18px] text-muted-foreground" aria-hidden="true" /> : null}
+        {Icon ? <Icon className="size-4.5 text-muted-foreground" aria-hidden="true" /> : null}
       </div>
       <p className="mt-3 font-mono text-3xl font-semibold tracking-tight tabular-nums">{value}</p>
       {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}

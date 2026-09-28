@@ -15,6 +15,7 @@ with required(table_name, column_name) as (
     ('queue_sessions', 'id'), ('queue_sessions', 'organization_id'), ('queue_sessions', 'queue_id'), ('queue_sessions', 'session_date'), ('queue_sessions', 'queue_prefix'), ('queue_sessions', 'next_number'), ('queue_sessions', 'is_active'), ('queue_sessions', 'admission_status'),
     ('queue_entries', 'id'), ('queue_entries', 'organization_id'), ('queue_entries', 'queue_session_id'), ('queue_entries', 'queue_id'), ('queue_entries', 'queue_number'), ('queue_entries', 'status'), ('queue_entries', 'registration_source'),
     ('queue_history', 'organization_id'), ('queue_history', 'queue_session_id'), ('queue_history', 'queue_id'),
+    ('public_queue_snapshot', 'queue_session_id'),
     ('activity_log', 'id'), ('activity_log', 'organization_id'), ('activity_log', 'queue_id'), ('activity_log', 'action'), ('activity_log', 'details'), ('activity_log', 'created_at'),
     ('queue_presence', 'queue_entry_id'), ('queue_presence', 'organization_id'), ('queue_presence', 'queue_id'), ('queue_presence', 'queue_number'), ('queue_presence', 'presence'), ('queue_presence', 'last_seen_at'),
     ('queue_status_tokens', 'queue_entry_id'), ('queue_status_tokens', 'token_hash'), ('queue_status_tokens', 'revoked_at')
@@ -108,6 +109,8 @@ with required(signature) as (
     ('public.register_walk_in_patient(uuid,text,text)'),
     ('public.reset_organization_queue_session(uuid)'),
     ('public.get_organization_location_queue_stats(uuid)'),
+    ('public.get_organization_queue_session_states(uuid)'),
+    ('public.start_organization_queue_session(uuid)'),
     ('public.get_organization_analytics(uuid,date,date,uuid)'),
     ('public.update_student_queue_presence(text,text)'),
     ('public.transition_queue_entry(uuid,text)'),
@@ -134,6 +137,18 @@ select 'RPC signature compatibility' as test,
          else 'PASS'
        end as status,
        'organization-level compatibility wrappers present; UUID-only public lookups absent' as details;
+
+select 'queue session lifecycle RPC privileges' as test,
+       case
+         when to_regprocedure('public.start_organization_queue_session(uuid)') is null then 'FAIL'
+         when to_regprocedure('public.get_organization_queue_session_states(uuid)') is null then 'FAIL'
+         when not has_function_privilege('authenticated', to_regprocedure('public.start_organization_queue_session(uuid)'), 'EXECUTE') then 'FAIL'
+         when has_function_privilege('anon', to_regprocedure('public.start_organization_queue_session(uuid)'), 'EXECUTE') then 'FAIL'
+         when not has_function_privilege('authenticated', to_regprocedure('public.get_organization_queue_session_states(uuid)'), 'EXECUTE') then 'FAIL'
+         when has_function_privilege('anon', to_regprocedure('public.get_organization_queue_session_states(uuid)'), 'EXECUTE') then 'FAIL'
+         else 'PASS'
+       end as status,
+       'start/state management is authenticated; public state is only in organization-bound queue details' as details;
 
 -- TEST 5: Required triggers.
 -- FAIL means an expected lifecycle, queue-scope, QR-provisioning, or timestamp trigger is absent.
@@ -556,9 +571,9 @@ select 'public queue details response shape' as test,
          when (select payload is null from detail) then 'FAIL'
          when exists (
            select 1 from detail d cross join lateral jsonb_object_keys(d.payload) k(key)
-           where k.key not in ('queueId','queueName','locationName','queuePrefix','serviceArea','availability')
+           where k.key not in ('queueId','queueName','locationName','queuePrefix','serviceArea','availability','sessionDate','sessionId','sessionStatus')
          ) then 'FAIL'
-         when not (select payload ?& array['queueId','queueName','locationName','queuePrefix','serviceArea','availability'] from detail) then 'FAIL'
+         when not (select payload ?& array['queueId','queueName','locationName','queuePrefix','serviceArea','availability','sessionDate','sessionId','sessionStatus'] from detail) then 'FAIL'
          else 'PASS'
        end as status,
        'no patient/private columns are expected in this RPC response' as details;
@@ -629,15 +644,69 @@ select 'active queues have active public QR bearers' as test,
 with function_defs as (
   select
     pg_get_functiondef(to_regprocedure('public.join_queue_with_status_token(text,text,text,text,text,text,text)')) as join_def,
+    pg_get_functiondef(to_regprocedure('public.register_walk_in_for_queue(uuid,text,text)')) as walk_in_def,
     pg_get_functiondef(to_regprocedure('public.get_organization_analytics(uuid,date,date,uuid)')) as analytics_def
 )
 select 'join RPC checks queue availability and queue-bound token' as test,
        case when position('QUEUE_PAUSED' in join_def) > 0
                   and position('QUEUE_CLOSED' in join_def) > 0
                   and position('queue_id' in join_def) > 0
+                  and position('SESSION_NOT_STARTED' in join_def) > 0
+                  and position('SESSION_ENDED' in join_def) > 0
+                  and position('SESSION_NOT_STARTED' in walk_in_def) > 0
+                  and position('SESSION_ENDED' in walk_in_def) > 0
             then 'PASS' else 'FAIL' end as status,
-       'runtime pause/close denial requires an authenticated or public QR test fixture' as details
+       'QR and walk-in RPCs require an active session; runtime denial still needs staging test' as details
 from function_defs;
+
+select 'active session availability matches queue availability' as test,
+       case when count(*) = 0 then 'PASS' else 'FAIL' end as status,
+       count(*) as inconsistent_active_sessions
+from public.queue_sessions s
+join public.organization_queues q on q.id = s.queue_id and q.organization_id = s.organization_id
+where s.session_date = current_date
+  and s.is_active
+  and s.admission_status is distinct from q.admission_status;
+
+select 'no duplicate current-day queue sessions' as test,
+       case when exists (
+         select 1 from public.queue_sessions
+         where session_date = current_date and queue_id is not null
+         group by organization_id, queue_id, session_date
+         having count(*) > 1
+       ) then 'FAIL' else 'PASS' end as status,
+       'the unique queue/date index should enforce this invariant' as details;
+
+select 'session date basis and configured queue zones' as test,
+       'NEEDS MANUAL TEST' as status,
+       format('database_timezone=%s; database_current_date=%s; configured_queue_time_zones=%s',
+         current_setting('TimeZone'),
+         current_date,
+         coalesce((select string_agg(distinct time_zone, ', ' order by time_zone)
+                   from public.organization_queues where nullif(time_zone, '') is not null), 'none')) as details;
+
+with details_def as (
+  select pg_get_functiondef(to_regprocedure('public.get_public_queue_details(text,uuid)')) as body
+)
+select 'public queue details reports independent session state' as test,
+       case when position('NOT_STARTED' in body) > 0
+                  and position('ACTIVE' in body) > 0
+                  and position('ENDED' in body) > 0
+                  and position('sessionStatus' in body) > 0
+            then 'PASS' else 'FAIL' end as status,
+       'session state is returned separately from queue availability' as details
+from details_def;
+
+with join_def as (
+  select pg_get_functiondef(to_regprocedure('public.join_queue_with_status_token(text,text,text,text,text,text,text)')) as body
+)
+select 'QR registration requires pre-started active session' as test,
+       case when position('SESSION_NOT_STARTED' in body) > 0
+                  and position('SESSION_ENDED' in body) > 0
+                  and position('insert into public.queue_sessions' in lower(body)) = 0
+            then 'PASS' else 'FAIL' end as status,
+       'registration must not silently create a session' as details
+from join_def;
 
 with definition as (
   select pg_get_functiondef(to_regprocedure('public.get_organization_analytics(uuid,date,date,uuid)')) as body
@@ -787,6 +856,10 @@ select 'STAFF profile directory scope' as test,
 -- select count(*) from public.organization_queues where organization_id = '<KNOWN_ORG_UUID>'::uuid; -- expected authorized organization queues
 -- select public.get_organization_analytics('<KNOWN_ORG_UUID>'::uuid, current_date - 7, current_date, null); -- expected selected-organization aggregate
 -- select public.get_organization_location_queue_stats('<KNOWN_ORG_UUID>'::uuid); -- expected all queues in that organization
+--
+-- Session start/resume: in staging, call public.start_organization_queue_session('<QUEUE_UUID>'::uuid)
+-- as an authorized admin/staff; expect ACTIVE and a sessionId. Call again; expect the same
+-- sessionId and no counter reset. As anon or unassigned STAFF, expect permission denial.
 --
 -- Realtime: sign in as STAFF A, then trigger test events in queue A and queue B in
 -- staging. STAFF A should receive A only. Repeat as ORG_ADMIN; both queues in the

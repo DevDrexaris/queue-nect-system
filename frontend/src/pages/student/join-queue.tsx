@@ -15,6 +15,7 @@ import { VISIT_PURPOSES, YEAR_LEVELS } from '../../types'
 import { cn } from '../../lib/utils'
 import { LoadingState } from '../../components/ui/states'
 import { useQueueSnapshot } from '../../hooks/use-queue-snapshot'
+import { queueSessionLabel } from '../../lib/queue-session'
 
 export function JoinQueuePage() {
   const { clinicId = '' } = useParams()
@@ -65,6 +66,14 @@ export function JoinQueuePage() {
   })
 
   async function onSubmit(values: JoinQueueValues) {
+    if (queueSnapshot?.clinic.sessionStatus !== 'ACTIVE') {
+      toast.error(queueSnapshot?.clinic.sessionStatus === 'ENDED'
+        ? "Today's queue session has ended. Please contact staff."
+        : queueSnapshot?.clinic.sessionStatus === 'NOT_STARTED'
+          ? "Today's queue session has not started. Please wait for staff to start it."
+          : 'Queue session status could not be verified. Please try again shortly.')
+      return
+    }
     if (queueSnapshot?.clinic.availability !== 'OPEN') {
       toast.error(queueSnapshot?.clinic.availability === 'PAUSED'
         ? 'Queue Temporarily Paused. New queue entries are unavailable right now.'
@@ -92,15 +101,24 @@ export function JoinQueuePage() {
   if (!accessValid) return null
 
   const availability = queueSnapshot?.clinic.availability ?? 'UNKNOWN'
-  if (availability !== 'OPEN') {
+  const sessionStatus = queueSnapshot?.clinic.sessionStatus ?? 'UNKNOWN'
+  if (sessionStatus !== 'ACTIVE' || availability !== 'OPEN') {
     const isPaused = availability === 'PAUSED'
+    const sessionNotReady = sessionStatus === 'NOT_STARTED' || sessionStatus === 'ENDED'
     return (
       <div className="space-y-4 text-center">
         <div className="rounded-xl border border-border bg-card p-6">
           <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{queueSnapshot?.clinic.name || 'Queue-Nect'}</p>
-          <h1 className="mt-3 text-2xl font-semibold">{isPaused ? 'Queue Temporarily Paused' : availability === 'CLOSED' ? 'Queue Currently Closed' : 'Queue Availability Unavailable'}</h1>
+          <p className="mt-2 text-sm font-medium text-muted-foreground">{queueSnapshot?.clinic.queueName || 'Queue'} · {availability}</p>
+          <h1 className="mt-3 text-2xl font-semibold">{sessionNotReady ? queueSessionLabel(sessionStatus) : sessionStatus === 'UNKNOWN' ? 'Queue Session Unavailable' : isPaused ? 'Queue Temporarily Paused' : availability === 'CLOSED' ? 'Queue Currently Closed' : 'Queue Availability Unavailable'}</h1>
           <p className="mt-3 text-sm leading-6 text-muted-foreground">
-            {isPaused
+            {sessionNotReady
+              ? sessionStatus === 'ENDED'
+                ? "Today's session has ended. Please ask staff when the next session will be available."
+                : "The queue is configured OPEN, but today's session has not started. Please wait for staff to start it."
+              : sessionStatus === 'UNKNOWN'
+                ? 'Queue session status could not be verified. Please try again shortly or ask staff for assistance.'
+              : isPaused
               ? 'New queue entries are temporarily unavailable. Please check again shortly.'
               : availability === 'CLOSED'
                 ? 'The clinic is not accepting new queue entries at this time. Please ask staff for assistance.'

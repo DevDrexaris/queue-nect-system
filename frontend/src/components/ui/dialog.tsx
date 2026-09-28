@@ -17,23 +17,29 @@ export function Dialog({ open, onClose, title, description, children, footer, cl
   const titleId = useId()
   const descriptionId = useId()
   const dialogRef = useRef<HTMLDivElement>(null)
+  const onCloseRef = useRef(onClose)
+
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
 
   useEffect(() => {
     if (!open) return
     const previouslyFocused = document.activeElement as HTMLElement | null
+    const previousOverflow = document.body.style.overflow
     dialogRef.current?.focus()
 
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape') onCloseRef.current()
     }
     document.addEventListener('keydown', onKey)
     document.body.style.overflow = 'hidden'
     return () => {
       document.removeEventListener('keydown', onKey)
-      document.body.style.overflow = ''
+      document.body.style.overflow = previousOverflow
       previouslyFocused?.focus()
     }
-  }, [open, onClose])
+  }, [open])
 
   if (!open) return null
 
@@ -48,11 +54,11 @@ export function Dialog({ open, onClose, title, description, children, footer, cl
         aria-describedby={description ? descriptionId : undefined}
         tabIndex={-1}
         className={cn(
-          'relative z-10 w-full max-w-md rounded-xl border border-border bg-card p-5 shadow-lg',
+          'relative z-10 flex max-h-[min(90dvh,48rem)] w-full max-w-md flex-col overflow-hidden rounded-xl border border-border bg-card p-5 shadow-lg',
           className,
         )}
       >
-        <div className="mb-4 flex items-start justify-between gap-4">
+        <div className="mb-4 flex shrink-0 items-start justify-between gap-4">
           <div>
             <h2 id={titleId} className="text-lg font-semibold">
               {title}
@@ -67,8 +73,8 @@ export function Dialog({ open, onClose, title, description, children, footer, cl
             <X className="size-4" />
           </Button>
         </div>
-        {children}
-        {footer ? <div className="mt-5 flex justify-end gap-2">{footer}</div> : null}
+        <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+        {footer ? <div className="mt-4 flex shrink-0 justify-end gap-2 border-t border-border pt-3">{footer}</div> : null}
       </div>
     </div>
   )

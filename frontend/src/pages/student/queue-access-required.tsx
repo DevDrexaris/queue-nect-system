@@ -52,7 +52,7 @@ export function QueueAccessRequiredPage() {
 
         <div className="mt-6 rounded-xl border border-dashed border-border bg-muted p-4 text-sm text-muted-foreground">
           {loading ? (
-            <div className="flex min-h-[180px] items-center justify-center text-sm text-muted-foreground">
+            <div className="flex min-h-45 items-center justify-center text-sm text-muted-foreground">
               Generating queue access QR...
             </div>
           ) : link ? (
@@ -67,7 +67,7 @@ export function QueueAccessRequiredPage() {
               <p className="mt-2">No app installation is required.</p>
             </div>
           ) : (
-            <div className="flex min-h-[180px] items-center justify-center px-2 text-center text-sm text-destructive">
+            <div className="flex min-h-45 items-center justify-center px-2 text-center text-sm text-destructive">
               {errorMessage || 'QR code is unavailable right now. Please try again.'}
             </div>
           )}

@@ -20,7 +20,7 @@ export function QueueNumber({
   return (
     <span
       className={cn(
-        'queue-number font-display font-bold tracking-[0.025em] tabular-nums text-foreground',
+        'queue-number font-display font-bold tracking-wide tabular-nums text-foreground',
         sizes[size],
         className,
       )}

@@ -12,7 +12,8 @@ import { EmptyState, ErrorState, LoadingState } from '../../components/ui/states
 import { useAdminQueueScope } from '../../hooks/use-admin-queue-scope'
 import { useAuth } from '../../hooks/use-auth'
 import { userMessage } from '../../lib/api'
-import { organizationStructureService } from '../../services/api'
+import { organizationStructureService, queueService } from '../../services/api'
+import { queueSessionLabel, queueSessionVariant } from '../../lib/queue-session'
 import type { LocationType, OrganizationLocation, OrganizationQueue, QueueAvailability } from '../../types'
 
 const locationTypes: LocationType[] = ['Building', 'Clinic', 'Branch', 'Department', 'Other']
@@ -62,6 +63,8 @@ export function AdminLocationsPage() {
   const [locationForm, setLocationForm] = useState<LocationForm>(emptyLocation)
   const [queueForm, setQueueForm] = useState<QueueForm>(emptyQueue)
   const [saving, setSaving] = useState(false)
+  const [startingQueueId, setStartingQueueId] = useState<string | null>(null)
+  const [endingQueueId, setEndingQueueId] = useState<string | null>(null)
   const [stats, setStats] = useState<Awaited<ReturnType<typeof organizationStructureService.stats>> | null>(null)
 
   async function loadStats() {
@@ -110,7 +113,7 @@ export function AdminLocationsPage() {
 
   async function saveLocation(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!organizationId) return
+    if (!organizationId || saving) return
     setSaving(true)
     try {
       if (locationTarget) {
@@ -132,7 +135,7 @@ export function AdminLocationsPage() {
 
   async function saveQueue(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    if (!organizationId) return
+    if (!organizationId || saving) return
     setSaving(true)
     try {
       const values = {
@@ -190,6 +193,32 @@ export function AdminLocationsPage() {
       setError(userMessage(caught, 'staff'))
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function startQueueSession(queue: OrganizationQueue) {
+    setStartingQueueId(queue.id)
+    try {
+      const result = await queueService.startSession(queue.id)
+      toast.success(result.resumed ? "Today's session resumed." : "Today's session started.")
+      await Promise.all([reloadQueueCatalog(), loadStats()])
+    } catch (caught) {
+      toast.error(userMessage(caught, 'staff'))
+    } finally {
+      setStartingQueueId(null)
+    }
+  }
+
+  async function endQueueSession(queue: OrganizationQueue) {
+    setEndingQueueId(queue.id)
+    try {
+      const result = await queueService.endSession(queue.id)
+      toast.success(result.ended ? "Today's session ended." : "Today's session was already inactive.")
+      await Promise.all([reloadQueueCatalog(), loadStats()])
+    } catch (caught) {
+      toast.error(userMessage(caught, 'staff'))
+    } finally {
+      setEndingQueueId(null)
     }
   }
 
@@ -273,6 +302,7 @@ export function AdminLocationsPage() {
                             <div className="flex flex-wrap items-center gap-2">
                               <p className="font-medium">{queue.name}</p>
                               <Badge variant={queue.admissionStatus === 'OPEN' ? 'success' : queue.admissionStatus === 'PAUSED' ? 'warning' : 'outline'}>{queue.admissionStatus}</Badge>
+                              <Badge variant={queueSessionVariant(queue.sessionStatus)}>{queueSessionLabel(queue.sessionStatus)}</Badge>
                               {!queue.isActive ? <Badge variant="outline">Archived</Badge> : null}
                             </div>
                             <p className="mt-1 text-sm text-muted-foreground">Prefix {queue.queuePrefix}{queue.serviceArea ? ` · ${queue.serviceArea}` : ''}</p>
@@ -284,7 +314,17 @@ export function AdminLocationsPage() {
                             {queue.description ? <p className="mt-1 text-sm text-muted-foreground">{queue.description}</p> : null}
                           </div>
                           {canManage ? (
-                            <div className="flex gap-2">
+                            <div className="flex flex-wrap gap-2">
+                              {queue.isActive && queue.admissionStatus !== 'CLOSED' && (queue.sessionStatus === 'NOT_STARTED' || queue.sessionStatus === 'ENDED') ? (
+                                <Button size="sm" loading={startingQueueId === queue.id} onClick={() => void startQueueSession(queue)}>
+                                  {queue.sessionStatus === 'ENDED' ? 'Resume Session' : 'Start Today\'s Session'}
+                                </Button>
+                              ) : null}
+                              {queue.isActive ? (
+                                <Button size="sm" variant="outline" loading={endingQueueId === queue.id} onClick={() => void endQueueSession(queue)}>
+                                  End Session
+                                </Button>
+                              ) : null}
                               <Button size="sm" variant="outline" onClick={() => editQueue(queue)}>Edit</Button>
                               {!queue.isDefault && queue.isActive ? <Button size="sm" variant="destructive" onClick={() => void archiveQueue(queue)}>Archive</Button> : null}
                             </div>
@@ -304,16 +344,25 @@ export function AdminLocationsPage() {
         open={locationOpen}
         onClose={() => { if (!saving) setLocationOpen(false) }}
         title={locationTarget ? 'Edit Location' : 'Add Location'}
+        className="sm:max-w-lg"
         description="Create a building, clinic, branch, department, or other service location."
         footer={<><Button variant="outline" disabled={saving} onClick={() => setLocationOpen(false)}>Cancel</Button><Button type="submit" form="location-form" loading={saving}>{locationTarget ? 'Save Location' : 'Create Location'}</Button></>}
       >
         <form id="location-form" className="space-y-4" onSubmit={(event) => void saveLocation(event)}>
-          <div><Label htmlFor="location-name">Location / Building Name</Label><Input id="location-name" value={locationForm.name} maxLength={120} required onChange={(event) => setLocationForm({ ...locationForm, name: event.target.value })} /></div>
-          <div><Label htmlFor="location-type">Location Type</Label><Select id="location-type" value={locationForm.locationType} onChange={(event) => setLocationForm({ ...locationForm, locationType: event.target.value as LocationType })}>{locationTypes.map((type) => <option key={type}>{type}</option>)}</Select></div>
-          <div><Label htmlFor="location-description">Description (optional)</Label><Input id="location-description" value={locationForm.description} onChange={(event) => setLocationForm({ ...locationForm, description: event.target.value })} /></div>
-          <div><Label htmlFor="location-address">Address or Floor (optional)</Label><Input id="location-address" value={locationForm.addressOrFloor} onChange={(event) => setLocationForm({ ...locationForm, addressOrFloor: event.target.value })} /></div>
-          <div><Label htmlFor="location-contact">Contact Information (optional)</Label><Input id="location-contact" value={locationForm.contactInformation} onChange={(event) => setLocationForm({ ...locationForm, contactInformation: event.target.value })} /></div>
-          {locationTarget ? <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={locationForm.isActive} disabled={locationTarget.isDefault} onChange={(event) => setLocationForm({ ...locationForm, isActive: event.target.checked })} />Active</label> : null}
+          <div>
+            <Label htmlFor="location-name">Location / Building Name</Label>
+            <Input id="location-name" value={locationForm.name} maxLength={120} required onChange={(event) => setLocationForm((current) => ({ ...current, name: event.target.value }))} />
+          </div>
+          <div>
+            <Label htmlFor="location-type">Location Type</Label>
+            <Select id="location-type" value={locationForm.locationType} onChange={(event) => setLocationForm((current) => ({ ...current, locationType: event.target.value as LocationType }))}>
+              {locationTypes.map((type) => <option key={type}>{type}</option>)}
+            </Select>
+          </div>
+          <div><Label htmlFor="location-description">Description (optional)</Label><Input id="location-description" value={locationForm.description} onChange={(event) => setLocationForm((current) => ({ ...current, description: event.target.value }))} /></div>
+          <div><Label htmlFor="location-address">Address or Floor (optional)</Label><Input id="location-address" value={locationForm.addressOrFloor} onChange={(event) => setLocationForm((current) => ({ ...current, addressOrFloor: event.target.value }))} /></div>
+          <div><Label htmlFor="location-contact">Contact Information (optional)</Label><Input id="location-contact" value={locationForm.contactInformation} onChange={(event) => setLocationForm((current) => ({ ...current, contactInformation: event.target.value }))} /></div>
+          {locationTarget ? <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={locationForm.isActive} disabled={locationTarget.isDefault} onChange={(event) => setLocationForm((current) => ({ ...current, isActive: event.target.checked }))} />Active</label> : null}
         </form>
       </Dialog>
 
@@ -321,24 +370,25 @@ export function AdminLocationsPage() {
         open={queueOpen}
         onClose={() => { if (!saving) setQueueOpen(false) }}
         title={queueTarget ? 'Edit Queue' : 'Add Queue'}
+        className="sm:max-w-xl"
         description="Configure an independent service queue for this organization."
         footer={<><Button variant="outline" disabled={saving} onClick={() => setQueueOpen(false)}>Cancel</Button><Button type="submit" form="queue-form" loading={saving}>{queueTarget ? 'Save Queue' : 'Create Queue'}</Button></>}
       >
         <form id="queue-form" className="space-y-4" onSubmit={(event) => void saveQueue(event)}>
-          <div><Label htmlFor="queue-name">Queue / Service Name</Label><Input id="queue-name" value={queueForm.name} maxLength={120} required onChange={(event) => setQueueForm({ ...queueForm, name: event.target.value })} /></div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><Label htmlFor="queue-prefix">Queue Prefix</Label><Input id="queue-prefix" value={queueForm.queuePrefix} maxLength={5} required onChange={(event) => setQueueForm({ ...queueForm, queuePrefix: event.target.value.toUpperCase() })} /></div>
-            <div><Label htmlFor="queue-location">Assign Location</Label><Select id="queue-location" value={queueForm.locationId} required onChange={(event) => setQueueForm({ ...queueForm, locationId: event.target.value })}><option value="" disabled>Select location</option>{locations.filter((location) => location.isActive).map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</Select></div>
+          <div><Label htmlFor="queue-name">Queue / Service Name</Label><Input id="queue-name" value={queueForm.name} maxLength={120} required onChange={(event) => setQueueForm((current) => ({ ...current, name: event.target.value }))} /></div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div><Label htmlFor="queue-prefix">Queue Prefix</Label><Input id="queue-prefix" value={queueForm.queuePrefix} maxLength={5} required onChange={(event) => setQueueForm((current) => ({ ...current, queuePrefix: event.target.value.toUpperCase() }))} /></div>
+            <div><Label htmlFor="queue-location">Assign Location</Label><Select id="queue-location" value={queueForm.locationId} required onChange={(event) => setQueueForm((current) => ({ ...current, locationId: event.target.value }))}><option value="" disabled>Select location</option>{locations.filter((location) => location.isActive).map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}</Select></div>
           </div>
-          <div><Label htmlFor="queue-description">Description (optional)</Label><Input id="queue-description" value={queueForm.description} onChange={(event) => setQueueForm({ ...queueForm, description: event.target.value })} /></div>
-          <div><Label htmlFor="queue-service-area">Service Area / Counter (optional)</Label><Input id="queue-service-area" value={queueForm.serviceArea} onChange={(event) => setQueueForm({ ...queueForm, serviceArea: event.target.value })} /></div>
-          <div><Label htmlFor="queue-availability">Queue Availability</Label><Select id="queue-availability" value={queueForm.admissionStatus} onChange={(event) => setQueueForm({ ...queueForm, admissionStatus: event.target.value as QueueForm['admissionStatus'] })}>{queueStates.map((state) => <option key={state}>{state}</option>)}</Select></div>
-          <div className="grid grid-cols-2 gap-3">
-            <div><Label htmlFor="queue-open-time">Opening Time (optional)</Label><Input id="queue-open-time" type="time" value={queueForm.openingTime} onChange={(event) => setQueueForm({ ...queueForm, openingTime: event.target.value })} /></div>
-            <div><Label htmlFor="queue-close-time">Closing Time (optional)</Label><Input id="queue-close-time" type="time" value={queueForm.closingTime} onChange={(event) => setQueueForm({ ...queueForm, closingTime: event.target.value })} /></div>
+          <div><Label htmlFor="queue-description">Description (optional)</Label><Input id="queue-description" value={queueForm.description} onChange={(event) => setQueueForm((current) => ({ ...current, description: event.target.value }))} /></div>
+          <div><Label htmlFor="queue-service-area">Service Area / Counter (optional)</Label><Input id="queue-service-area" value={queueForm.serviceArea} onChange={(event) => setQueueForm((current) => ({ ...current, serviceArea: event.target.value }))} /></div>
+          <div><Label htmlFor="queue-availability">Queue Availability</Label><Select id="queue-availability" value={queueForm.admissionStatus} onChange={(event) => setQueueForm((current) => ({ ...current, admissionStatus: event.target.value as QueueForm['admissionStatus'] }))}>{queueStates.map((state) => <option key={state}>{state}</option>)}</Select></div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div><Label htmlFor="queue-open-time">Opening Time (optional)</Label><Input id="queue-open-time" type="time" value={queueForm.openingTime} onChange={(event) => setQueueForm((current) => ({ ...current, openingTime: event.target.value }))} /></div>
+            <div><Label htmlFor="queue-close-time">Closing Time (optional)</Label><Input id="queue-close-time" type="time" value={queueForm.closingTime} onChange={(event) => setQueueForm((current) => ({ ...current, closingTime: event.target.value }))} /></div>
           </div>
-          <div><Label htmlFor="queue-time-zone">Time Zone (optional)</Label><Input id="queue-time-zone" placeholder="Asia/Manila" value={queueForm.timeZone} onChange={(event) => setQueueForm({ ...queueForm, timeZone: event.target.value })} /></div>
-          {queueTarget ? <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={queueForm.isActive} disabled={queueTarget.isDefault} onChange={(event) => setQueueForm({ ...queueForm, isActive: event.target.checked })} />Active</label> : null}
+          <div><Label htmlFor="queue-time-zone">Time Zone (optional)</Label><Input id="queue-time-zone" placeholder="Asia/Manila" value={queueForm.timeZone} onChange={(event) => setQueueForm((current) => ({ ...current, timeZone: event.target.value }))} /></div>
+          {queueTarget ? <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={queueForm.isActive} disabled={queueTarget.isDefault} onChange={(event) => setQueueForm((current) => ({ ...current, isActive: event.target.checked }))} />Active</label> : null}
         </form>
       </Dialog>
     </div>

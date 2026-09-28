@@ -21,18 +21,21 @@ import { useAdminQueueScope } from '../../hooks/use-admin-queue-scope'
 import { useQueueSnapshot } from '../../hooks/use-queue-snapshot'
 import { greetingForNow, formatRelative } from '../../lib/format'
 import { userMessage } from '../../lib/api'
+import { queueSessionLabel, queueSessionVariant } from '../../lib/queue-session'
 import { queueService } from '../../services/api'
 import type { QueueAvailability, QueueEntry } from '../../types'
 
 export function AdminDashboardPage() {
   const { user } = useAuth()
-  const { locations, queues, selectedQueueId } = useAdminQueueScope()
+  const { locations, queues, selectedQueueId, reloadQueueCatalog } = useAdminQueueScope()
   const clinicId = user?.clinic?.identifier
   const { data, error, loading, reload, updateAvailability } = useQueueSnapshot(clinicId, 8000, selectedQueueId)
   const [calling, setCalling] = useState(false)
   const [pendingAction, setPendingAction] = useState<{ entry: QueueEntry; action: ConfirmedQueueAction } | null>(null)
   const [availabilityTarget, setAvailabilityTarget] = useState<Exclude<QueueAvailability, 'UNKNOWN'> | null>(null)
   const [availabilitySaving, setAvailabilitySaving] = useState(false)
+  const [sessionStarting, setSessionStarting] = useState(false)
+  const [sessionEnding, setSessionEnding] = useState(false)
   const [walkInOpen, setWalkInOpen] = useState(false)
   const [walkInQueueId, setWalkInQueueId] = useState('')
   const [walkInName, setWalkInName] = useState('')
@@ -70,11 +73,41 @@ export function AdminDashboardPage() {
     }
   }
 
+  async function startSession() {
+    if (!selectedQueueId) return
+    setSessionStarting(true)
+    try {
+      const result = await queueService.startSession(selectedQueueId)
+      toast.success(result.resumed ? "Today's queue session resumed." : "Today's queue session started.")
+      await Promise.all([reload(), reloadQueueCatalog()])
+    } catch (caught) {
+      toast.error(userMessage(caught, 'staff'))
+    } finally {
+      setSessionStarting(false)
+    }
+  }
+
+  async function endSession() {
+    if (!selectedQueueId) return
+    setSessionEnding(true)
+    try {
+      const result = await queueService.endSession(selectedQueueId)
+      toast.success(result.ended ? "Today's queue session ended." : "Today's queue session was already inactive.")
+      await Promise.all([reload(), reloadQueueCatalog()])
+    } catch (caught) {
+      toast.error(userMessage(caught, 'staff'))
+    } finally {
+      setSessionEnding(false)
+    }
+  }
+
   async function registerWalkIn() {
     if (!walkInQueueId || !walkInName.trim()) return
     const targetQueue = queues.find((queue) => queue.id === walkInQueueId && queue.isActive)
-    if (!targetQueue || targetQueue.admissionStatus !== 'OPEN') {
-      toast.error('The selected queue is not open for new registrations.')
+    if (!targetQueue || targetQueue.admissionStatus !== 'OPEN' || targetQueue.sessionStatus !== 'ACTIVE') {
+      toast.error(targetQueue?.sessionStatus !== 'ACTIVE'
+        ? "Today's queue session has not started. Start it before accepting registrations."
+        : 'The selected queue is not open for new registrations.')
       return
     }
     setWalkInSaving(true)
@@ -157,6 +190,7 @@ export function AdminDashboardPage() {
   const calledEntry = data?.entries.find((item) => item.status === 'CALLED') ?? null
   const upNext = data?.upNext ?? []
   const availability = data?.clinic.availability ?? 'UNKNOWN'
+  const sessionStatus = data?.clinic.sessionStatus ?? 'UNKNOWN'
 
   async function confirmAvailabilityChange() {
     if (!selectedQueueId || !availabilityTarget) return
@@ -232,13 +266,13 @@ export function AdminDashboardPage() {
         description={user?.clinic?.name}
         actions={
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <Button size="sm" onClick={() => void callNext()} loading={calling} disabled={!selectedQueueId}>
+            <Button size="sm" onClick={() => void callNext()} loading={calling} disabled={!selectedQueueId || sessionStatus !== 'ACTIVE'}>
               {calling ? 'Calling...' : 'Call next'}
             </Button>
             <Button
               size="sm"
               variant="outline"
-              disabled={!queues.some((queue) => queue.isActive && queue.admissionStatus === 'OPEN')}
+              disabled={!queues.some((queue) => queue.id === selectedQueueId && queue.isActive && queue.admissionStatus === 'OPEN' && queue.sessionStatus === 'ACTIVE')}
               onClick={() => { setWalkInEntry(null); setWalkInQueueId(selectedQueueId ?? ''); setWalkInOpen(true) }}
             >
               Add Walk-in Patient
@@ -250,7 +284,7 @@ export function AdminDashboardPage() {
                 className={calledEntry ? 'border-status-calling/45 bg-status-calling/10 text-status-calling' : ''}
                 onClick={() => void serveNext()}
                 loading={calling}
-                disabled={!selectedQueueId}
+                disabled={!selectedQueueId || sessionStatus !== 'ACTIVE'}
               >
                 Serve next
               </Button>
@@ -273,14 +307,34 @@ export function AdminDashboardPage() {
 
       <Card className="mt-6">
         <CardHeader>
-          <CardTitle>Queue Availability</CardTitle>
+          <CardTitle>Queue Availability and Today's Session</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-muted-foreground">Current status</span>
-            <Badge variant={availabilityVariant}>{availabilityLabel}</Badge>
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-muted-foreground">Availability</span>
+              <Badge variant={availabilityVariant}>{availabilityLabel}</Badge>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm text-muted-foreground">Session</span>
+              <Badge variant={queueSessionVariant(sessionStatus)}>{queueSessionLabel(sessionStatus)}</Badge>
+              {sessionStatus === 'ACTIVE' && data?.clinic.sessionDate ? <span className="text-xs text-muted-foreground">{data.clinic.sessionDate}</span> : null}
+            </div>
+            {availability === 'OPEN' && sessionStatus === 'NOT_STARTED' ? (
+              <p className="text-sm text-muted-foreground">The queue is configured OPEN, but students cannot register until today's session starts.</p>
+            ) : null}
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 sm:justify-end">
+            {(sessionStatus === 'NOT_STARTED' || sessionStatus === 'ENDED') && availability !== 'CLOSED' ? (
+              <Button onClick={() => void startSession()} loading={sessionStarting} disabled={!selectedQueueId}>
+                {sessionStatus === 'ENDED' ? "Resume Today's Session" : "Start Today's Session"}
+              </Button>
+            ) : null}
+            {selectedQueueId ? (
+              <Button variant="outline" onClick={() => void endSession()} loading={sessionEnding} disabled={!selectedQueueId}>
+                End Today's Session
+              </Button>
+            ) : null}
             {availability === 'OPEN' ? (
               <>
                 <Button variant="outline" onClick={() => setAvailabilityTarget('PAUSED')}>Pause Queue</Button>

@@ -275,7 +275,7 @@ export const queueService = {
     if (orgError) throw orgError
     if (!org) {
       return {
-        clinic: { id: '', identifier: clinicIdentifier, name: clinicIdentifier, queuePrefix: 'A', availability: 'UNKNOWN' },
+        clinic: { id: '', identifier: clinicIdentifier, name: clinicIdentifier, queuePrefix: 'A', availability: 'UNKNOWN', sessionStatus: 'UNKNOWN' },
         nowServing: null,
         upNext: [],
         waitingCount: 0,
@@ -294,28 +294,36 @@ export const queueService = {
       resolvedQueueId = scopeResult.data ?? undefined
     }
     if (!resolvedQueueId) throw new Error('No active queue is available for this organization.')
-    const entriesQuery = client === supabase
-      ? client.from('queue_entries').select('*').eq('organization_id', org.id).eq('queue_id', resolvedQueueId)
-      : client.from('public_queue_snapshot').select('*').eq('public_identifier', clinicIdentifier).eq('queue_id', resolvedQueueId)
-    const [{ data: entries, error }, availabilityResult, queueDetailsResult] = await Promise.all([
-      entriesQuery.order('joined_at', { ascending: true }),
-      resolvedQueueId
-        ? supabaseAnon.rpc('get_organization_queue_availability', {
-            p_public_identifier: clinicIdentifier,
-            p_queue_id: resolvedQueueId,
-          })
-        : supabaseAnon.rpc('get_queue_availability', { p_public_identifier: clinicIdentifier }),
-      resolvedQueueId
-        ? supabaseAnon.rpc('get_public_queue_details', {
-            p_public_identifier: clinicIdentifier,
-            p_queue_id: resolvedQueueId,
-          })
-        : Promise.resolve({ data: null, error: null }),
+    const [availabilityResult, queueDetailsResult] = await Promise.all([
+      supabaseAnon.rpc('get_organization_queue_availability', {
+        p_queue_id: resolvedQueueId,
+      }),
+      supabaseAnon.rpc('get_public_queue_details', {
+        p_public_identifier: clinicIdentifier,
+        p_queue_id: resolvedQueueId,
+      }),
     ])
+    if (availabilityResult.error) throw availabilityResult.error
+    if (queueDetailsResult.error) throw queueDetailsResult.error
+    if (!queueDetailsResult.data) throw new Error('Queue could not be verified for this organization.')
 
-    if (error) throw error
-    if (availabilityResult.error) console.error('[Queue-Nect] Queue availability lookup failed:', availabilityResult.error)
-    if (queueDetailsResult.error) console.error('[Queue-Nect] Public queue details lookup failed:', queueDetailsResult.error)
+    let entries: any[] = []
+    if (queueDetailsResult.data.sessionStatus === 'ACTIVE') {
+      if (!queueDetailsResult.data.sessionId) throw new Error('Active queue session could not be verified.')
+      const entriesQuery = client === supabase
+        ? client.from('queue_entries').select('*')
+          .eq('organization_id', org.id)
+          .eq('queue_id', resolvedQueueId)
+          .eq('queue_session_id', queueDetailsResult.data.sessionId)
+        : client.from('public_queue_snapshot').select('*')
+          .eq('public_identifier', clinicIdentifier)
+          .eq('queue_id', resolvedQueueId)
+          .eq('queue_session_id', queueDetailsResult.data.sessionId)
+      const entriesResult = await entriesQuery.order('joined_at', { ascending: true })
+      if (entriesResult.error) throw entriesResult.error
+      entries = entriesResult.data ?? []
+    }
+
     const availabilityValue = availabilityResult.data
     const availability: QueueAvailability = ['OPEN', 'PAUSED', 'CLOSED'].includes(availabilityValue)
       ? availabilityValue as QueueAvailability
@@ -367,6 +375,9 @@ export const queueService = {
         queuePrefix: queueDetailsResult.data?.queuePrefix ?? org.queue_prefix,
         queueId: resolvedQueueId ?? undefined,
         availability,
+        sessionId: queueDetailsResult.data.sessionId ?? null,
+        sessionStatus: queueDetailsResult.data?.sessionStatus ?? 'UNKNOWN',
+        sessionDate: queueDetailsResult.data?.sessionDate,
         announcement: org.announcement_template ?? '',
         announcementsEnabled: org.announcements_enabled ?? true,
         announcementUseCustom: org.announcement_use_custom ?? false,
@@ -461,18 +472,11 @@ export const queueService = {
   },
 
   callNext: async (clinicIdentifier: string, queueId?: string): Promise<QueueEntry> => {
-    const { data: org } = await getOrgIdFromClinicIdentifier(clinicIdentifier)
-    if (!org) throw new Error('Clinic not found.')
-    const { data: waiting } = await supabase
-      .from('queue_entries')
-      .select('*')
-      .eq('organization_id', org.id)
-      .eq('queue_id', queueId ?? (await supabase.rpc('get_default_queue_id', { p_public_identifier: clinicIdentifier })).data)
-      .eq('status', 'WAITING')
-      .order('joined_at', { ascending: true })
-      .limit(1)
-      .maybeSingle()
-
+    const snapshot = await queueService.getSnapshot(clinicIdentifier, queueId)
+    if (snapshot.clinic.sessionStatus !== 'ACTIVE') {
+      throw new Error(snapshot.clinic.sessionStatus === 'ENDED' ? 'SESSION_ENDED' : 'SESSION_NOT_STARTED')
+    }
+    const waiting = snapshot.entries.find((entry) => entry.status === 'WAITING')
     if (!waiting) throw new Error('No waiting queue.')
     return queueService.updateStatus(waiting.id, 'call')
   },
@@ -506,20 +510,13 @@ export const queueService = {
   },
 
   serveNext: async (clinicIdentifier: string, queueId?: string): Promise<QueueEntry> => {
-    const { data: org } = await getOrgIdFromClinicIdentifier(clinicIdentifier)
-    if (!org) throw new Error('Clinic not found.')
-
-    const { data: target } = await supabase
-      .from('queue_entries')
-      .select('*')
-      .eq('organization_id', org.id)
-      .eq('queue_id', queueId ?? (await supabase.rpc('get_default_queue_id', { p_public_identifier: clinicIdentifier })).data)
-      .eq('status', 'CALLED')
-      .order('called_at', { ascending: false })
-      .order('joined_at', { ascending: true })
-      .limit(1)
-      .maybeSingle()
-
+    const snapshot = await queueService.getSnapshot(clinicIdentifier, queueId)
+    if (snapshot.clinic.sessionStatus !== 'ACTIVE') {
+      throw new Error(snapshot.clinic.sessionStatus === 'ENDED' ? 'SESSION_ENDED' : 'SESSION_NOT_STARTED')
+    }
+    const target = snapshot.entries
+      .filter((entry) => entry.status === 'CALLED')
+      .sort((left, right) => new Date(right.calledAt ?? '').getTime() - new Date(left.calledAt ?? '').getTime())[0]
     if (!target) throw new Error('No called number is ready to serve.')
     return queueService.updateStatus(target.id, 'serve')
   },
@@ -548,31 +545,26 @@ export const queueService = {
   },
 
   resetQueue: async (clinicIdentifier: string, queueId?: string) => {
-    const { data: org, error: orgError } = await getOrgIdFromClinicIdentifier(clinicIdentifier)
-    if (orgError) throw orgError
-    if (!org) throw new Error('Clinic not found.')
-
     const resolvedQueueId = await resolveQueueId(clinicIdentifier, queueId)
-    const today = new Date().toISOString().slice(0, 10)
-    const { data: session, error: sessionError } = await supabase
-      .from('queue_sessions')
-      .select('*')
-      .eq('organization_id', org.id)
-      .eq('queue_id', resolvedQueueId)
-      .eq('session_date', today)
-      .eq('is_active', true)
-      .maybeSingle()
-
-    if (sessionError) throw sessionError
-    if (!session) {
-      throw new Error('There is no active queue session for today to reset.')
-    }
-
-    const { data, error } = resolvedQueueId
-      ? await supabase.rpc('reset_organization_queue_session', { p_queue_id: resolvedQueueId })
-      : await supabase.rpc('reset_queue_session', { p_organization_id: org.id })
+    const { data, error } = await supabase.rpc('reset_organization_queue_session', { p_queue_id: resolvedQueueId })
     if (error) throw error
-    return { queueSessionId: session.id, queuePrefix: session.queue_prefix, cancelledEntries: data }
+    return { cancelledEntries: data }
+  },
+
+  startSession: async (queueId: string): Promise<{ sessionDate: string; resumed: boolean }> => {
+    const { data, error } = await supabase.rpc('start_organization_queue_session', {
+      p_queue_id: queueId,
+    })
+    if (error) throw error
+    return { sessionDate: data.sessionDate, resumed: Boolean(data.resumed) }
+  },
+
+  endSession: async (queueId: string): Promise<{ sessionDate: string; ended: boolean }> => {
+    const { data, error } = await supabase.rpc('end_organization_queue_session', {
+      p_queue_id: queueId,
+    })
+    if (error) throw error
+    return { sessionDate: data.sessionDate, ended: Boolean(data.ended) }
   },
 
   setAvailability: async (queueId: string, availability: Exclude<QueueAvailability, 'UNKNOWN'>): Promise<Exclude<QueueAvailability, 'UNKNOWN'>> => {
@@ -852,12 +844,18 @@ export const organizationStructureService = {
     }
   },
   list: async (organizationId: string): Promise<{ locations: OrganizationLocation[]; queues: OrganizationQueue[] }> => {
-    const [locationResult, queueResult] = await Promise.all([
+    const [locationResult, queueResult, sessionResult] = await Promise.all([
       supabase.from('organization_locations').select('*').eq('organization_id', organizationId).order('name'),
       supabase.from('organization_queues').select('*').eq('organization_id', organizationId).order('name'),
+      supabase.rpc('get_organization_queue_session_states', { p_organization_id: organizationId }),
     ])
     if (locationResult.error) throw locationResult.error
     if (queueResult.error) throw queueResult.error
+    if (sessionResult.error) throw sessionResult.error
+    const sessionByQueueId = new Map<string, { sessionId: string | null; sessionStatus: OrganizationQueue['sessionStatus']; sessionDate: string }>(
+      ((sessionResult.data ?? []) as Array<{ queueId: string; sessionId: string | null; sessionStatus: OrganizationQueue['sessionStatus']; sessionDate: string }>)
+        .map((session) => [session.queueId, { sessionId: session.sessionId, sessionStatus: session.sessionStatus, sessionDate: session.sessionDate }]),
+    )
     const locations: OrganizationLocation[] = (locationResult.data ?? []).map((row) => ({
       id: row.id,
       organizationId: row.organization_id,
@@ -881,6 +879,9 @@ export const organizationStructureService = {
       description: row.description,
       serviceArea: row.service_area,
       admissionStatus: row.admission_status,
+      sessionId: sessionByQueueId.get(row.id)?.sessionId,
+      sessionStatus: sessionByQueueId.get(row.id)?.sessionStatus ?? 'UNKNOWN',
+      sessionDate: sessionByQueueId.get(row.id)?.sessionDate,
       openingTime: row.opening_time,
       closingTime: row.closing_time,
       timeZone: row.time_zone,
@@ -998,6 +999,47 @@ export const adminUsersService = {
 
     return { users }
   },
+  createStaff: async (payload: {
+    name: string
+    email: string
+    password: string
+    organizationId: string
+    locationId?: string | null
+    queueId?: string | null
+    mode?: 'temporary-password' | 'email-invitation'
+  }): Promise<AdminAccount> => {
+    const { data, error } = await supabase.functions.invoke('provision-account', {
+      body: {
+        name: payload.name,
+        email: payload.email,
+        password: payload.password,
+        role: 'STAFF',
+        organizationId: payload.organizationId,
+        locationId: payload.locationId ?? null,
+        queueId: payload.queueId ?? null,
+        mode: payload.mode ?? 'temporary-password',
+      },
+    })
+
+    if (error) {
+      throw new Error(error.message || 'Unable to create the staff account.')
+    }
+
+    if (!data?.success || !data?.user) {
+      throw new Error('Unable to create the staff account.')
+    }
+
+    return {
+      id: data.user.id,
+      name: payload.name.trim(),
+      email: payload.email.trim(),
+      role: 'STAFF',
+      organizationId: data.user.organizationId,
+      locationId: data.user.locationId ?? undefined,
+      queueId: data.user.queueId ?? undefined,
+      status: 'active',
+    }
+  },
 }
 
 export const superAdminService = {
@@ -1103,25 +1145,37 @@ export const superAdminService = {
     const email = payload.email ?? ''
     const roleValue = (payload.role ?? 'ADMIN') as UserRole
     const organizationId = payload.organizationId ?? null
+    const mode = payload.mode === 'email-invitation' ? 'email-invitation' : 'temporary-password'
 
-    const { data, error } = await supabase.from('profiles').insert({
-      full_name: name,
-      email,
-      role: roleValue,
-      organization_id: organizationId,
-      is_active: true,
-    }).select('*').single()
+    const { data, error } = await supabase.functions.invoke('provision-account', {
+      body: {
+        name,
+        email,
+        password: payload.temporaryPassword ?? payload.password ?? 'ChangeMe123!',
+        role: roleValue,
+        organizationId,
+        locationId: null,
+        queueId: null,
+        mode,
+      },
+    })
 
-    if (error) throw error
+    if (error) {
+      throw new Error(error.message || 'Unable to create the administrator account.')
+    }
+
+    if (!data?.success || !data?.user) {
+      throw new Error('Unable to create the administrator account.')
+    }
 
     return {
-      id: data.id,
-      name: data.full_name,
-      email: data.email,
-      role: mapRole(data.role),
-      organizationId: data.organization_id ?? undefined,
+      id: data.user.id,
+      name,
+      email,
+      role: mapRole(data.user.role),
+      organizationId: data.user.organizationId ?? undefined,
       clinicName: undefined,
-      status: data.is_active ? 'active' : 'disabled',
+      status: 'active',
     }
   },
   deleteAdmin: async (id: string) => {

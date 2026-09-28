@@ -12,6 +12,7 @@ import { SearchInput } from '../../components/ui/search-input'
 import { Select } from '../../components/ui/select'
 import { EmptyState, ErrorState, LoadingState } from '../../components/ui/states'
 import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card'
+import { Badge } from '../../components/ui/badge'
 import { ActionItem, ActionMenu } from '../../components/ui/action-menu'
 import { TBody, TD, TH, THead, TR, Table } from '../../components/ui/table'
 import { useAuth } from '../../hooks/use-auth'
@@ -21,6 +22,7 @@ import { useAdminRealtimeContext } from '../../hooks/use-admin-realtime-context'
 import { formatTime, formatWait } from '../../lib/format'
 import { userMessage } from '../../lib/api'
 import { queueService } from '../../services/api'
+import { queueSessionLabel, queueSessionVariant } from '../../lib/queue-session'
 import { QUEUE_STATUSES, formatQueueStatusLabel, type QueueEntry, type QueueStatus } from '../../types'
 
 export function AdminQueuePage() {
@@ -38,6 +40,8 @@ export function AdminQueuePage() {
   const [resetPending, setResetPending] = useState(false)
   const [resetConfirmed, setResetConfirmed] = useState(false)
   const [calling, setCalling] = useState(false)
+  const [sessionStarting, setSessionStarting] = useState(false)
+  const [sessionEnding, setSessionEnding] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
 
   const entries = (data?.entries ?? []).filter((item) => {
@@ -105,8 +109,8 @@ export function AdminQueuePage() {
     if (!clinicId || !selectedQueueId) return
     setResetting(true)
     try {
-      const result = await queueService.resetQueue(clinicId, selectedQueueId)
-      toast.success(`Queue number reset to ${result.queuePrefix}001 for this session.`)
+      await queueService.resetQueue(clinicId, selectedQueueId)
+      toast.success(`Queue number reset for today's ${data?.clinic.queuePrefix ?? 'queue'} session.`)
       setResetPending(false)
       setResetConfirmed(false)
       await reload()
@@ -114,6 +118,34 @@ export function AdminQueuePage() {
       toast.error(userMessage(caught))
     } finally {
       setResetting(false)
+    }
+  }
+
+  async function startSession() {
+    if (!selectedQueueId) return
+    setSessionStarting(true)
+    try {
+      const result = await queueService.startSession(selectedQueueId)
+      toast.success(result.resumed ? "Today's queue session resumed." : "Today's queue session started.")
+      await reload()
+    } catch (caught) {
+      toast.error(userMessage(caught, 'staff'))
+    } finally {
+      setSessionStarting(false)
+    }
+  }
+
+  async function endSession() {
+    if (!selectedQueueId) return
+    setSessionEnding(true)
+    try {
+      const result = await queueService.endSession(selectedQueueId)
+      toast.success(result.ended ? "Today's queue session ended." : "Today's queue session was already inactive.")
+      await reload()
+    } catch (caught) {
+      toast.error(userMessage(caught, 'staff'))
+    } finally {
+      setSessionEnding(false)
     }
   }
 
@@ -132,6 +164,7 @@ export function AdminQueuePage() {
 
   const serving = data?.nowServing
   const calledEntry = data?.entries.find((item) => item.status === 'CALLED') ?? null
+  const sessionStatus = data?.clinic.sessionStatus ?? 'UNKNOWN'
 
   function renderQueueActions(item: QueueEntry) {
     return (
@@ -175,7 +208,7 @@ export function AdminQueuePage() {
         description="Call, serve, skip, or cancel students in the live queue."
         actions={
           <div className="flex flex-wrap items-center justify-end gap-2">
-            <Button size="sm" onClick={() => void callNext()} loading={calling}>
+            <Button size="sm" onClick={() => void callNext()} loading={calling} disabled={sessionStatus !== 'ACTIVE'}>
               {calling ? 'Calling...' : 'Call next'}
             </Button>
             <div className="relative">
@@ -185,6 +218,7 @@ export function AdminQueuePage() {
                 className={calledEntry ? 'border-status-calling/45 bg-status-calling/10 text-status-calling' : ''}
                 onClick={() => void serveNext()}
                 loading={calling}
+                disabled={sessionStatus !== 'ACTIVE'}
               >
                 Serve next
               </Button>
@@ -195,12 +229,33 @@ export function AdminQueuePage() {
                 </div>
               ) : null}
             </div>
-            <Button size="sm" variant="outline" onClick={() => setResetPending(true)} loading={resetting}>
+            <Button size="sm" variant="outline" onClick={() => setResetPending(true)} loading={resetting} disabled={sessionStatus !== 'ACTIVE'}>
               {resetting ? 'Resetting...' : 'Reset Queue Number'}
             </Button>
           </div>
         }
       />
+
+      <Card className="mb-6">
+        <CardContent className="flex flex-col gap-3 pt-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm text-muted-foreground">Today's session</span>
+            <Badge variant={queueSessionVariant(sessionStatus)}>{queueSessionLabel(sessionStatus)}</Badge>
+            {sessionStatus === 'ACTIVE' && data?.clinic.sessionDate ? <span className="text-xs text-muted-foreground">{data.clinic.sessionDate}</span> : null}
+            {sessionStatus === 'NOT_STARTED' ? <span className="text-sm text-muted-foreground">Start a session before resetting or serving this queue.</span> : null}
+          </div>
+          {(sessionStatus === 'NOT_STARTED' || sessionStatus === 'ENDED') && data?.clinic.availability !== 'CLOSED' ? (
+            <Button onClick={() => void startSession()} loading={sessionStarting} disabled={!selectedQueueId}>
+              {sessionStatus === 'ENDED' ? "Resume Today's Session" : "Start Today's Session"}
+            </Button>
+          ) : null}
+          {selectedQueueId ? (
+            <Button variant="outline" onClick={() => void endSession()} loading={sessionEnding} disabled={!selectedQueueId}>
+              End Today's Session
+            </Button>
+          ) : null}
+        </CardContent>
+      </Card>
 
       <Card className="mb-6">
         <CardHeader>
@@ -355,7 +410,7 @@ export function AdminQueuePage() {
           setResetConfirmed(false)
         }}
         title="Reset queue number?"
-        description="This will reset the next queue number to A001 for this session. Existing queue history will remain unchanged."
+        description={`This resets the next queue number to ${data?.clinic.queuePrefix ?? 'A'}001 for the active session. Existing queue history will remain unchanged.`}
         footer={
           <>
             <Button variant="outline" onClick={() => { setResetPending(false); setResetConfirmed(false) }}>

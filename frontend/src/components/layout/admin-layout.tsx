@@ -194,7 +194,7 @@ export function AdminLayout() {
         <div className="flex min-w-0 flex-1 flex-col">
           <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-border bg-elevated/90 px-4 backdrop-blur">
             <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setOpen(true)} aria-label="Open navigation">
-              <Menu className="size-[18px]" />
+              <Menu className="size-4.5" />
             </Button>
             <div className="min-w-0 flex-1">
               <h1 className="truncate text-base font-semibold">{title}</h1>

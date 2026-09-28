@@ -30,6 +30,8 @@ import { SuperAdminAdministratorsPage } from './pages/super-admin/administrators
 import { SuperAdminActivityPage } from './pages/super-admin/activity'
 import { SuperAdminSettingsPage } from './pages/super-admin/settings'
 import { TvDisplayPage } from './pages/display/tv-display'
+import { AuthCallbackPage } from './pages/auth/auth-callback'
+import { AuthSetupPasswordPage } from './pages/auth/auth-setup-password'
 import { ThemeProvider } from './providers/theme-provider'
 import { ThemeRouteSync } from './providers/theme-route-sync'
 
@@ -54,6 +56,9 @@ export default function App() {
           <Route path="/queue/:clinicId/confirmed" element={<StudentLayout />}>
             <Route index element={<QueueSuccessPage />} />
           </Route>
+          <Route path="/auth/callback" element={<AuthCallbackPage />} />
+          <Route path="/auth/setup-password" element={<AuthSetupPasswordPage />} />
+          <Route path="/auth/accept-invite" element={<AuthCallbackPage />} />
           <Route path="/display" element={<DisplayLayout />}>
             <Route index element={<TvDisplayPage />} />
             <Route path=":clinicId" element={<TvDisplayPage />} />

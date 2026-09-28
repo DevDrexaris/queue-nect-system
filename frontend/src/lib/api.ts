@@ -34,6 +34,8 @@ export function userMessage(error: unknown, audience: 'student' | 'staff' | 'gen
   if (normalized.includes('queue is not open')) return 'This queue is not accepting entries yet. Please ask staff for help.'
   if (normalized.includes('queue_paused')) return 'Queue Temporarily Paused. New queue entries are unavailable right now.'
   if (normalized.includes('queue_closed')) return 'Queue Currently Closed. Please ask staff for assistance.'
+  if (normalized.includes('session_not_started')) return "Today's queue session has not started. Ask staff to start the session before accepting registrations."
+  if (normalized.includes('session_ended')) return "Today's queue session has ended. Ask an administrator to resume it."
   if (normalized.includes('no active queue session')) return 'There is no active queue session today. Please contact your organization administrator.'
   if (normalized.includes('not authorized to manage this queue')) return 'You are not authorized to change queue availability.'
   if (normalized.includes('invalid or expired') || normalized.includes('no longer active')) return 'This queue link is no longer active. Please scan the current QR code.'

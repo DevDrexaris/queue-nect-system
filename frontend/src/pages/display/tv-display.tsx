@@ -8,6 +8,7 @@ import { queueService } from '../../services/api'
 import { cn } from '../../lib/utils'
 import { QueueEventAnimation, type QueueEventKind } from '../../components/ui/queue-event-animation'
 import { buildQueueAnnouncement, enqueueSpeechAnnouncement } from '../../lib/speech'
+import { queueSessionLabel } from '../../lib/queue-session'
 
 export function TvDisplayPage() {
   const { clinicId } = useParams()
@@ -157,9 +158,11 @@ export function TvDisplayPage() {
       </header>
 
       <main className="flex flex-1 flex-col justify-center py-8">
-        {data && availability !== 'OPEN' ? (
+        {data && (availability !== 'OPEN' || data.clinic.sessionStatus !== 'ACTIVE') ? (
           <div className="mb-6 rounded-xl border border-border bg-card px-4 py-3 text-center text-sm text-muted-foreground" role="status">
-            {availability === 'PAUSED'
+            {data.clinic.sessionStatus === 'NOT_STARTED' || data.clinic.sessionStatus === 'ENDED'
+              ? `${queueSessionLabel(data.clinic.sessionStatus)}. New registrations are unavailable.`
+              : availability === 'PAUSED'
               ? 'New queue registrations are temporarily paused.'
               : availability === 'CLOSED'
                 ? 'The clinic is currently closed to new queue registrations.'

@@ -64,4 +64,31 @@ export const createAdminSchema = z.object({
   temporaryPassword: z.string().min(8, 'Use at least 8 characters.'),
   organizationId: z.string().min(1, 'Select an organization.'),
   role: z.literal('ADMIN'),
+  method: z.enum(['temporary-password', 'email-invitation']),
+}).superRefine((value, ctx) => {
+  if (value.method === 'temporary-password' && value.temporaryPassword.length < 8) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['temporaryPassword'],
+      message: 'Password must be at least 8 characters.',
+    })
+  }
+})
+
+export const createStaffSchema = z.object({
+  name: z.string().trim().min(2, 'Enter the full name.'),
+  email: z.string().trim().email('Enter a valid email.'),
+  password: z.string().min(8, 'Use at least 8 characters.'),
+  organizationId: z.string().min(1, 'Select an organization.'),
+  locationId: z.string().optional().or(z.literal('')),
+  queueId: z.string().optional().or(z.literal('')),
+  method: z.enum(['temporary-password', 'email-invitation']),
+}).superRefine((value, ctx) => {
+  if (value.method === 'temporary-password' && value.password.length < 8) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['password'],
+      message: 'Password must be at least 8 characters.',
+    })
+  }
 })

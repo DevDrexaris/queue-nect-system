@@ -29,7 +29,8 @@ export function SuperAdminAdministratorsPage() {
   const [deleteTarget, setDeleteTarget] = useState<AdminAccount | null>(null)
   const form = useForm<Values>({
     resolver: zodResolver(createAdminSchema),
-    defaultValues: { role: 'ADMIN', name: '', email: '', temporaryPassword: '', organizationId: '' },
+    mode: 'onBlur',
+    defaultValues: { role: 'ADMIN', name: '', email: '', temporaryPassword: '', organizationId: '', method: 'temporary-password' },
   })
 
   async function load() {
@@ -53,7 +54,7 @@ export function SuperAdminAdministratorsPage() {
 
   function openCreate() {
     setEditingUser(null)
-    form.reset({ role: 'ADMIN', name: '', email: '', temporaryPassword: '', organizationId: '' })
+    form.reset({ role: 'ADMIN', name: '', email: '', temporaryPassword: '', organizationId: '', method: 'temporary-password' })
     setOpen(true)
   }
 
@@ -65,6 +66,7 @@ export function SuperAdminAdministratorsPage() {
       email: item.email,
       temporaryPassword: '',
       organizationId: item.organizationId ?? '',
+      method: 'temporary-password',
     })
     setOpen(true)
   }
@@ -80,12 +82,18 @@ export function SuperAdminAdministratorsPage() {
         })
         toast.success('Administrator updated.')
       } else {
-        await superAdminService.createAdmin(values)
-        toast.success('Administrator created. They should change their password after signing in.')
+        await superAdminService.createAdmin({
+          ...values,
+          mode: values.method,
+          temporaryPassword: values.method === 'temporary-password' ? values.temporaryPassword : '',
+        })
+        toast.success(values.method === 'email-invitation'
+          ? 'Administrator invitation sent.'
+          : 'Administrator created. They should change their password after signing in.')
       }
       setOpen(false)
       setEditingUser(null)
-      form.reset({ role: 'ADMIN' })
+      form.reset({ role: 'ADMIN', method: 'temporary-password' })
       await load()
     } catch (caught) {
       toast.error(userMessage(caught))
@@ -178,7 +186,7 @@ export function SuperAdminAdministratorsPage() {
         onClose={() => {
           setOpen(false)
           setEditingUser(null)
-          form.reset({ role: 'ADMIN' })
+          form.reset({ role: 'ADMIN', method: 'temporary-password' })
         }}
         title={editingUser ? 'Edit clinic admin' : 'Create clinic admin'}
         description={
@@ -204,7 +212,19 @@ export function SuperAdminAdministratorsPage() {
           </>
         }
       >
-        <div className="space-y-3">
+        <div className="space-y-4">
+          <div>
+            <Label htmlFor="method">Account creation method</Label>
+            <Select
+              id="method"
+              value={form.watch('method')}
+              onChange={(event) => form.setValue('method', event.target.value as 'temporary-password' | 'email-invitation')}
+            >
+              <option value="temporary-password">Temporary password</option>
+              <option value="email-invitation">Email invitation</option>
+            </Select>
+          </div>
+
           <div>
             <Label htmlFor="name">Full Name</Label>
             <Input id="name" {...form.register('name')} />
@@ -215,11 +235,17 @@ export function SuperAdminAdministratorsPage() {
             <Input id="email" type="email" {...form.register('email')} />
             <FieldError message={form.formState.errors.email?.message} />
           </div>
-          <div>
-            <Label htmlFor="temporaryPassword">Temporary Password</Label>
-            <Input id="temporaryPassword" type="password" {...form.register('temporaryPassword')} />
-            <FieldError message={form.formState.errors.temporaryPassword?.message} />
-          </div>
+          {form.watch('method') === 'temporary-password' ? (
+            <div>
+              <Label htmlFor="temporaryPassword">Temporary Password</Label>
+              <Input id="temporaryPassword" type="password" {...form.register('temporaryPassword')} />
+              <FieldError message={form.formState.errors.temporaryPassword?.message} />
+            </div>
+          ) : (
+            <div className="rounded-lg border border-dashed border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+              An invitation email will be sent to this address, and the user will set their own password through the secure authentication flow.
+            </div>
+          )}
           <div>
             <Label htmlFor="organizationId">Organization / Clinic</Label>
             <Select id="organizationId" {...form.register('organizationId')}>

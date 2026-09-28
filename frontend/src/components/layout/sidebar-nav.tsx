@@ -42,7 +42,7 @@ export function SidebarNav({
                       )
                     }
                   >
-                    <Icon className="size-[18px] shrink-0" aria-hidden="true" />
+                    <Icon className="size-4.5 shrink-0" aria-hidden="true" />
                     {item.label}
                   </NavLink>
                 </li>

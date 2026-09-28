@@ -45,6 +45,7 @@ export type YearLevel = (typeof YEAR_LEVELS)[number]
 export const USER_ROLES = ['ADMIN', 'ORG_ADMIN', 'STAFF', 'SUPER_ADMIN'] as const
 export type UserRole = (typeof USER_ROLES)[number]
 export type QueueAvailability = 'OPEN' | 'PAUSED' | 'CLOSED' | 'UNKNOWN'
+export type QueueSessionStatus = 'ACTIVE' | 'NOT_STARTED' | 'ENDED' | 'UNKNOWN'
 export type LocationType = 'Building' | 'Clinic' | 'Branch' | 'Department' | 'Other'
 
 export type OrganizationLocation = {
@@ -70,6 +71,9 @@ export type OrganizationQueue = {
   description?: string | null
   serviceArea?: string | null
   admissionStatus: Exclude<QueueAvailability, 'UNKNOWN'>
+  sessionId?: string | null
+  sessionStatus?: QueueSessionStatus
+  sessionDate?: string
   openingTime?: string | null
   closingTime?: string | null
   timeZone?: string | null
@@ -92,6 +96,9 @@ export type Clinic = {
   locationName?: string
   serviceArea?: string | null
   availability?: QueueAvailability
+  sessionId?: string | null
+  sessionStatus?: QueueSessionStatus
+  sessionDate?: string
   announcement?: string
   announcementsEnabled?: boolean
   announcementUseCustom?: boolean
